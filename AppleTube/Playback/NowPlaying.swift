@@ -65,8 +65,14 @@ final class NowPlaying {
         Task {
             guard let (data, _) = try? await URLSession.shared.data(from: url),
                   let image = UIImage(data: data), url == artworkURL else { return }
-            artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+            artwork = Self.makeArtwork(image)
             update(from: WebPlayer.shared)
         }
+    }
+
+    /// MediaPlayer calls the image handler on a background queue. Building it outside the main actor keeps
+    /// the closure non-isolated; a main-actor closure here trips Swift 6's isolation check and crashes.
+    private nonisolated static func makeArtwork(_ image: UIImage) -> MPMediaItemArtwork {
+        MPMediaItemArtwork(boundsSize: image.size) { @Sendable _ in image }
     }
 }
