@@ -13,5 +13,18 @@ Personal iOS app: Apple Music-style UI on top of the user's YouTube Music Premiu
 - Simulator: `xcodebuild -project AppleTube.xcodeproj -scheme AppleTube -destination 'platform=iOS Simulator,name=iPhone 18 Pro,OS=27.0' -derivedDataPath build build`. Use the iOS 27.0 iPhone 18 Pro sim: the iOS 27.1 runtime only supports the foldable "iPhone Duo", which renders the wide layout.
 - Device: set DEVELOPMENT_TEAM in project.yml, then `-destination 'platform=iOS,name=<iPhone name>'`.
 
+## Testing
+- `xcodebuild test ... -scheme AppleTube` runs parser tests against `AppleTubeTests/Fixtures` (real signed-out responses).
+- Refresh fixtures when YouTube changes: `python3 -I Scripts/capture_fixtures.py AppleTubeTests/Fixtures`.
+- Screenshots: `Scripts/screenshot.sh <out.png> <wait> [args]`. Launch args: `-startTab new|radio|library|search`,
+  `-openRoute playlist:<id>|artist:<id>`, `-autoplayVideoId <id>`, `-showNowPlaying YES`, `-nowPlayingPanel lyrics|queue`,
+  `-searchQuery <text>`. First launch after install takes ~15s; wait longer for the first shot.
+- Device: iPhone 15 (UDID 00008120-00066C800E01A01E), iOS 27. Install with `xcrun devicectl device install app`.
+  Crash logs: `xcrun devicectl device info files --domain-type systemCrashLogs`.
+
+## Gotchas
+- Closures MediaPlayer/WebKit call off-main must not be main-actor isolated (Swift 6 traps); build them in `nonisolated` helpers.
+- Lock Screen controls come from the page's Media Session handlers (WebKit), not MPRemoteCommandCenter.
+
 ## Stages
 0 setup · 1 read references · 2 playback spike (lock-screen background audio is the go/no-go) · 3 map API with REA · 4 UI screen by screen · 5 device + polish

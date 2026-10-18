@@ -26,6 +26,8 @@ struct ParserFixtureTests {
         #expect(!response.songs.isEmpty)
         #expect(!response.albums.isEmpty)
         #expect(response.artists.contains { $0.name.localizedCaseInsensitiveContains("coldplay") })
+        // Songs inside the "Top result" artist card come without artists (the card names them); the rest have them.
+        #expect(response.songs.contains { !$0.artistsDisplay.isEmpty })
     }
 
     @Test func suggestions() throws {
@@ -60,6 +62,10 @@ struct ParserFixtureTests {
     @Test func lyrics() throws {
         let lyrics = LyricsParser.parse(from: try fixture("lyrics"))
         #expect(lyrics.isAvailable)
+    }
+
+    @Test func albumPlaybackList() throws {
+        #expect(YTMusicAPI.albumPlaybackListId(in: try fixture("album"))?.hasPrefix("OLAK5uy_") == true)
     }
 
     @Test func apiKeyExtraction() {

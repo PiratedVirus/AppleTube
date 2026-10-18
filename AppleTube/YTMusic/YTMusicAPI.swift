@@ -31,6 +31,11 @@ final class YTMusicAPI {
         return (HomeResponseParser.parseContinuation(data), HomeResponseParser.extractContinuationTokenFromContinuation(data))
     }
 
+    /// YouTube Music's Explore page (new releases, charts, moods); its shelves parse like Home's.
+    func explore() async throws -> [HomeSection] {
+        HomeResponseParser.parse(try await request("browse", body: ["browseId": "FEmusic_explore"])).sections
+    }
+
     func search(_ query: String) async throws -> SearchResponse {
         SearchResponseParser.parse(try await request("search", body: ["query": query]))
     }
@@ -41,10 +46,36 @@ final class YTMusicAPI {
     }
 
     /// Albums (`MPREb_…`) and playlists both load through browse; plain playlist IDs need the `VL` prefix.
-    func playlist(id: String) async throws -> PlaylistTracksResponse {
+    /// `playbackListId` is what the web player queues: an album's `OLAK5uy_…` list, or the bare playlist ID.
+    func playlist(id: String) async throws -> (response: PlaylistTracksResponse, playbackListId: String?) {
         let loadsAsIs = id.hasPrefix("VL") || id.hasPrefix("RD") || id.hasPrefix("MPRE") || id.hasPrefix("UC")
         let data = try await request("browse", body: ["browseId": loadsAsIs ? id : "VL\(id)"])
-        return PlaylistParser.parsePlaylistWithContinuation(data, playlistId: id)
+        let listId = id.hasPrefix("MPRE") ? Self.albumPlaybackListId(in: data) : (id.hasPrefix("VL") ? String(id.dropFirst(2)) : id)
+        return (PlaylistParser.parsePlaylistWithContinuation(data, playlistId: id), listId)
+    }
+
+    /// Every track row on an album page plays with the album's `OLAK5uy_…` list; pick the most common one in
+    /// the track list (other shelves on the page carry radio and related-album lists).
+    nonisolated static func albumPlaybackListId(in data: [String: Any]) -> String? {
+        var node: Any? = data
+        for key in ["contents", "twoColumnBrowseResultsRenderer", "secondaryContents", "sectionListRenderer", "contents"] {
+            node = (node as? [String: Any])?[key]
+        }
+        let sections = node as? [[String: Any]]
+        guard let trackList = sections?.first(where: { $0["musicShelfRenderer"] != nil }) else { return nil }
+        var counts: [String: Int] = [:]
+        func walk(_ node: Any) {
+            if let dict = node as? [String: Any] {
+                if let id = (dict["watchEndpoint"] as? [String: Any])?["playlistId"] as? String, id.hasPrefix("OLAK") {
+                    counts[id, default: 0] += 1
+                }
+                dict.values.forEach(walk)
+            } else if let array = node as? [Any] {
+                array.forEach(walk)
+            }
+        }
+        walk(trackList)
+        return counts.max { $0.value < $1.value }?.key
     }
 
     func artist(id: String) async throws -> ArtistDetail {

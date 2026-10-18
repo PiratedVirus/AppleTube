@@ -1,7 +1,6 @@
 import SwiftUI
 
-/// Stage 2 test screen: sign in, play a track through the hidden web player, check Lock Screen controls.
-/// Temporary; replaced by the real Apple Music-style screens in Stage 4.
+/// Playback diagnostics (Account → Playback Test): play a track by video ID and watch the player state.
 struct PlaybackSpikeView: View {
     @State private var signedIn: Bool?
     @State private var showLogin = false
@@ -9,8 +8,7 @@ struct PlaybackSpikeView: View {
     private let player = WebPlayer.shared
 
     var body: some View {
-        NavigationStack {
-            Form {
+        Form {
                 Section("Account") {
                     LabeledContent("YouTube Music", value: signedIn == nil ? "Checking…" : (signedIn! ? "Signed in" : "Signed out"))
                     if signedIn == true {
@@ -55,9 +53,7 @@ struct PlaybackSpikeView: View {
                     LabeledContent("Position", value: "\(Int(player.position))s / \(Int(player.duration))s")
                 }
             }
-            .navigationTitle("Playback test")
-        }
-        .background(WindowAttacher())
+        .navigationTitle("Playback Test")
         .sheet(isPresented: $showLogin) {
             NavigationStack {
                 LoginView {
@@ -70,28 +66,10 @@ struct PlaybackSpikeView: View {
             }
         }
         .task {
-            // `-autoplayVideoId <id>` launch argument lets automated runs start playback without a tap.
-            if let id = UserDefaults.standard.string(forKey: "autoplayVideoId") {
-                videoId = id
-                player.load(videoId: id)
-            }
             signedIn = await WebSession.isSignedIn()
         }
         .onChange(of: player.title) { _, title in
             if !title.isEmpty { print("[AppleTube] now playing: \(title) — \(player.artist) [\(player.status)]") }
-        }
-    }
-}
-
-/// Attaches the hidden player web view to the window once this view is on screen.
-private struct WindowAttacher: UIViewRepresentable {
-    func makeUIView(context _: Context) -> UIView { AttachingView() }
-    func updateUIView(_: UIView, context _: Context) {}
-
-    private final class AttachingView: UIView {
-        override func didMoveToWindow() {
-            super.didMoveToWindow()
-            if let window { WebPlayer.shared.attach(to: window) }
         }
     }
 }

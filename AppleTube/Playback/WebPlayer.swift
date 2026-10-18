@@ -11,6 +11,10 @@ final class WebPlayer: NSObject {
     private(set) var title = ""
     private(set) var artist = ""
     private(set) var artworkURL: URL?
+    /// YouTube video ID of the current track, read from the page URL (`watch?v=`).
+    private(set) var videoId: String?
+    /// Playlist/album the web player is working through (`list=`), if any.
+    private(set) var playlistId: String?
     private(set) var isPlaying = false
     private(set) var position: Double = 0
     private(set) var duration: Double = 0
@@ -77,9 +81,36 @@ final class WebPlayer: NSObject {
     }
 
     func load(videoId: String) {
-        guard let url = URL(string: "https://music.youtube.com/watch?v=\(videoId)") else { return }
-        setStatus("Loading \(videoId)…")
+        play(videoId: videoId, playlistId: nil)
+    }
+
+    /// Plays a track. With a playlist/album ID the web player queues the rest of it, so next/previous follow
+    /// that list; without one, YouTube Music builds a radio queue from the track.
+    func play(videoId: String, playlistId: String?) {
+        var components = URLComponents(string: "https://music.youtube.com/watch")!
+        components.queryItems = [URLQueryItem(name: "v", value: videoId)]
+        if let playlistId {
+            components.queryItems?.append(URLQueryItem(name: "list", value: playlistId))
+        }
+        guard let url = components.url else { return }
+        setStatus("Loading…")
+        isPlaying = false
         webView.load(URLRequest(url: url))
+    }
+
+    /// Plays a mix/station by its playlist ID; the web player picks the first track.
+    func play(playlistId: String) {
+        var components = URLComponents(string: "https://music.youtube.com/watch")!
+        components.queryItems = [URLQueryItem(name: "list", value: playlistId)]
+        guard let url = components.url else { return }
+        setStatus("Loading…")
+        isPlaying = false
+        webView.load(URLRequest(url: url))
+    }
+
+    /// `playbackListId` comes from `YTMusicAPI.playlist(id:)`; nil starts a radio from the song.
+    func play(_ song: Song, playbackListId: String? = nil) {
+        play(videoId: song.videoId, playlistId: playbackListId)
     }
 
     func play() { run("document.querySelector('video')?.play()") }
@@ -122,6 +153,8 @@ final class WebPlayer: NSObject {
         title = state["title"] as? String ?? ""
         artist = state["artist"] as? String ?? ""
         artworkURL = (state["art"] as? String).flatMap(URL.init(string:))
+        videoId = (state["vid"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+        playlistId = (state["list"] as? String).flatMap { $0.isEmpty ? nil : $0 }
         setStatus(isAdShowing ? "Ad playing" : (isPlaying ? "Playing" : "Paused"))
         let second = Int(position)
         if second / 5 != lastLoggedSecond / 5 {
@@ -149,6 +182,8 @@ final class WebPlayer: NSObject {
                 title: md ? (md.title || '') : '',
                 artist: md ? (md.artist || '') : '',
                 art: art,
+                vid: new URLSearchParams(location.search).get('v') || '',
+                list: new URLSearchParams(location.search).get('list') || '',
                 ad: !!document.querySelector('#movie_player.ad-showing')
             };
             const key = JSON.stringify(s);
