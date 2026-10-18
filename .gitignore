@@ -4,3 +4,5 @@ build/
 DerivedData/
 .DS_Store
 xcuserdata/
+docs/reference-screens/*
+!docs/reference-screens/SOURCES.md
