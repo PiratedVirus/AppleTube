@@ -20,9 +20,13 @@ final class WebPlayer: NSObject {
     @ObservationIgnored let webView: WKWebView
     @ObservationIgnored private var lastLoggedSecond = -5
     @ObservationIgnored private let nowPlaying = NowPlaying()
+    @ObservationIgnored private var wasPlayingWhenResigned = false
 
     override init() {
         let config = WebSession.makeConfiguration()
+        config.userContentController.addUserScript(
+            WKUserScript(source: Self.alwaysVisibleScript, injectionTime: .atDocumentStart, forMainFrameOnly: true)
+        )
         config.userContentController.addUserScript(
             WKUserScript(source: Self.observerScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
         )
@@ -34,6 +38,32 @@ final class WebPlayer: NSObject {
         webView.isUserInteractionEnabled = false
         webView.alpha = 0.01
         nowPlaying.connect(to: self)
+        observeAppLifecycle()
+    }
+
+    /// Locking the phone pauses the web player, but a play command while locked works. So remember whether we
+    /// were playing as the app resigns active and push play a few times once it's in the background.
+    private func observeAppLifecycle() {
+        let center = NotificationCenter.default
+        center.addObserver(forName: UIApplication.willResignActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.wasPlayingWhenResigned = self?.isPlaying ?? false }
+        }
+        center.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.resumeAfterBackgrounding() }
+        }
+    }
+
+    private func resumeAfterBackgrounding() {
+        guard wasPlayingWhenResigned else { return }
+        print("[AppleTube] backgrounded while playing; keeping playback alive")
+        Task {
+            for delay in [0.3, 1.0, 2.5, 5.0] {
+                try? await Task.sleep(for: .seconds(delay))
+                guard wasPlayingWhenResigned else { return }
+                play()
+            }
+            wasPlayingWhenResigned = false
+        }
     }
 
     /// WebKit only plays media for web views that are in a window, so park it there invisibly.
@@ -50,7 +80,10 @@ final class WebPlayer: NSObject {
     }
 
     func play() { run("document.querySelector('video')?.play()") }
-    func pause() { run("document.querySelector('video')?.pause()") }
+    func pause() {
+        wasPlayingWhenResigned = false
+        run("document.querySelector('video')?.pause()")
+    }
     func togglePlayPause() { isPlaying ? pause() : play() }
 
     func next() {
@@ -102,6 +135,7 @@ final class WebPlayer: NSObject {
         if (window.__appleTubeObserver) return;
         window.__appleTubeObserver = true;
         let last = '';
+        let ticks = 0;
         setInterval(function() {
             const v = document.querySelector('video');
             const md = navigator.mediaSession && navigator.mediaSession.metadata;
@@ -117,15 +151,57 @@ final class WebPlayer: NSObject {
             };
             const key = JSON.stringify(s);
             if (key !== last) { last = key; window.webkit.messageHandlers.player.postMessage(s); }
+            if (++ticks % 4 === 1) applyMediaSessionHandlers();
         }, 500);
+
+        // WebKit builds the Lock Screen controls from the page's Media Session handlers. Without next/previous
+        // handlers it shows ±10s skip buttons, so register track controls (Apple Music style) and drop seeking.
+        // Re-applied every 2s because the YouTube Music app can replace them on track changes.
+        function applyMediaSessionHandlers() {
+            const ms = navigator.mediaSession;
+            if (!ms) return;
+            const click = sel => document.querySelector(sel)?.click();
+            const post = cmd => window.webkit.messageHandlers.player.postMessage({ cmd: cmd });
+            const set = (action, handler) => { try { ms.setActionHandler(action, handler); } catch (e) {} };
+            set('play', () => { document.querySelector('video')?.play(); post('play'); });
+            set('pause', () => { document.querySelector('video')?.pause(); post('pause'); });
+            set('nexttrack', () => click('ytmusic-player-bar .next-button'));
+            set('previoustrack', () => click('ytmusic-player-bar .previous-button'));
+            set('seekto', d => { const v = document.querySelector('video'); if (v && d.seekTime != null) v.currentTime = d.seekTime; });
+            set('seekforward', null);
+            set('seekbackward', null);
+        }
+    })();
+    """
+
+    /// Keeps the page believing it's on screen so it doesn't pause itself when the phone locks.
+    private static let alwaysVisibleScript = """
+    (function() {
+        try {
+            Object.defineProperty(document, 'hidden', { get: () => false, configurable: true });
+            Object.defineProperty(document, 'webkitHidden', { get: () => false, configurable: true });
+            Object.defineProperty(document, 'visibilityState', { get: () => 'visible', configurable: true });
+            Object.defineProperty(document, 'webkitVisibilityState', { get: () => 'visible', configurable: true });
+        } catch (e) {}
+        const swallow = e => e.stopImmediatePropagation();
+        document.addEventListener('visibilitychange', swallow, true);
+        document.addEventListener('webkitvisibilitychange', swallow, true);
+        window.addEventListener('pagehide', swallow, true);
+        window.addEventListener('blur', swallow, true);
     })();
     """
 }
 
 extension WebPlayer: WKScriptMessageHandler {
     func userContentController(_: WKUserContentController, didReceive message: WKScriptMessage) {
-        guard let state = message.body as? [String: Any] else { return }
-        apply(state)
+        guard let body = message.body as? [String: Any] else { return }
+        if let command = body["cmd"] as? String {
+            // A pause from the Lock Screen is deliberate, so stop the auto-resume after locking.
+            if command == "pause" { wasPlayingWhenResigned = false }
+            print("[AppleTube] lock screen command: \(command)")
+            return
+        }
+        apply(body)
     }
 }
 
