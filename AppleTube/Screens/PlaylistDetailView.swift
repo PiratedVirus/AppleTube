@@ -9,18 +9,31 @@ struct PlaylistDetailView: View {
     @State private var page: Loadable<(detail: PlaylistDetail, listId: String?)> = .loading
     @State private var tint: Color = Color(.systemBackground)
     @State private var player = WebPlayer.shared
+    @State private var artistRoute: Route?
 
     var body: some View {
-        ScrollView {
+        // A List (not a ScrollView) so track rows get Apple Music's swipe actions.
+        List {
             switch page {
             case .loading:
-                LoadingView()
+                LoadingView().plainRow()
             case let .failed(message):
-                ErrorView(message: message) { Task { await load() } }
+                ErrorView(message: message) { Task { await load() } }.plainRow()
             case let .loaded((detail, listId)):
-                content(detail: detail, listId: listId)
+                header(detail: detail, listId: listId).plainRow()
+                ForEach(Array(detail.tracks.enumerated()), id: \.offset) { index, song in
+                    SongRow(song: song, index: index + 1, showsArtwork: !detail.isAlbum, isCurrent: player.videoId == song.videoId) {
+                        player.play(song, playbackListId: listId)
+                    }
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 12))
+                    .listRowSeparatorTint(textColor.opacity(0.2))
+                }
+                Color.clear.frame(height: 90).plainRow()
             }
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
         .background(background.ignoresSafeArea())
         .foregroundStyle(textColor)
         .tint(textColor)
@@ -30,6 +43,9 @@ struct PlaylistDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .task { await load() }
+        .navigationDestination(item: $artistRoute) { route in
+            if case let .artist(id, name) = route { ArtistView(id: id, fallbackName: name) }
+        }
     }
 
     private var isTinted: Bool { if case .loaded = page { true } else { false } }
@@ -40,7 +56,7 @@ struct PlaylistDetailView: View {
     }
 
     @ViewBuilder
-    private func content(detail: PlaylistDetail, listId: String?) -> some View {
+    private func header(detail: PlaylistDetail, listId: String?) -> some View {
         VStack(spacing: 14) {
             ArtworkView(url: detail.thumbnailURL, cornerRadius: 12)
                 .frame(width: 260)
@@ -52,14 +68,11 @@ struct PlaylistDetailView: View {
                     .font(.title2.bold())
                     .multilineTextAlignment(.center)
                 if let author = detail.author {
-                    if author.hasNavigableId {
-                        NavigationLink(value: Route.artist(id: author.id, name: author.name)) {
-                            Text(author.name).font(.title3)
-                        }
-                        .buttonStyle(.plain)
-                    } else {
+                    // A Button, not a NavigationLink: inside a List a link turns into a full-width chevron row.
+                    Button { artistRoute = author.hasNavigableId ? .artist(id: author.id, name: author.name) : nil } label: {
                         Text(author.name).font(.title3)
                     }
+                    .buttonStyle(.plain)
                 }
                 Text(metadata(detail))
                     .font(.footnote.weight(.medium))
@@ -95,17 +108,6 @@ struct PlaylistDetailView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            LazyVStack(spacing: 0) {
-                ForEach(Array(detail.tracks.enumerated()), id: \.offset) { index, song in
-                    SongRow(song: song, index: index + 1, showsArtwork: !detail.isAlbum, isCurrent: player.videoId == song.videoId) {
-                        player.play(song, playbackListId: listId)
-                    }
-                    .padding(.horizontal)
-                    .padding(.vertical, 8)
-                    Divider().opacity(0.4).padding(.leading, detail.isAlbum ? 52 : 76)
-                }
-            }
-            .padding(.bottom, 100)
         }
     }
 
@@ -145,5 +147,14 @@ struct PlaylistDetailView: View {
         } catch {
             page = .failed(error.localizedDescription)
         }
+    }
+}
+
+private extension View {
+    /// A full-width list row with no background, separator or insets (page header, spinners, padding).
+    func plainRow() -> some View {
+        listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets())
     }
 }

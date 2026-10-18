@@ -16,7 +16,7 @@ Personal iOS app: Apple Music-style UI on top of the user's YouTube Music Premiu
 ## Testing
 - `xcodebuild test ... -scheme AppleTube` runs parser tests against `AppleTubeTests/Fixtures` (real signed-out responses).
 - Refresh fixtures when YouTube changes: `python3 -I Scripts/capture_fixtures.py AppleTubeTests/Fixtures`.
-- Screenshots: `Scripts/screenshot.sh <out.png> <wait> [args]`. Launch args: `-startTab new|radio|library|search`,
+- Screenshots: `Scripts/screenshot.sh <out.png> <wait> [args]`. Launch args: `-startTab radio|library|search`,
   `-openRoute playlist:<id>|artist:<id>`, `-autoplayVideoId <id>`, `-showNowPlaying YES`, `-nowPlayingPanel lyrics|queue`,
   `-searchQuery <text>`, `-thenPlayVideoId <id>` (switch track after 30s). First launch after install takes ~15s; wait longer for the first shot.
 - Device: iPhone 15 (UDID 00008120-00066C800E01A01E), iOS 27. Install with `xcrun devicectl device install app`.
@@ -25,6 +25,10 @@ Personal iOS app: Apple Music-style UI on top of the user's YouTube Music Premiu
 ## Gotchas
 - Closures MediaPlayer/WebKit call off-main must not be main-actor isolated (Swift 6 traps); build them in `nonisolated` helpers.
 - Lock Screen controls come from the page's Media Session handlers (WebKit), not MPRemoteCommandCenter.
+- YouTube Music's web app ignores queue commands passed to `resolveCommand` (play next, add, remove). The working
+  path is clicking the real queue-row menu item, retargeting `queueTarget.videoId` (see WebPlayer+Queue.swift).
+  Jump to a queue row by clicking its `ytmusic-play-button-renderer`. Shuffle/repeat are player-bar buttons; autoplay is `#automix`.
+- In a List, NavigationLink renders as a full-width chevron row; use a Button + navigationDestination(item:) inside headers.
 
 ## Stages
 0 setup · 1 read references · 2 playback spike (lock-screen background audio is the go/no-go) · 3 map API with REA · 4 UI screen by screen · 5 device + polish

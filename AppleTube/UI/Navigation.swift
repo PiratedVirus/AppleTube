@@ -7,15 +7,52 @@ enum Route: Hashable {
 }
 
 extension View {
-    /// Registers the shared destinations; call once per tab's NavigationStack root.
+    /// Registers the shared destinations; call once per tab's NavigationStack root. Pages zoom out of the
+    /// card that opened them, like Apple Music.
     func musicDestinations() -> some View {
-        navigationDestination(for: Route.self) { route in
-            switch route {
-            case let .playlist(id, title): PlaylistDetailView(id: id, fallbackTitle: title)
-            case let .artist(id, name): ArtistView(id: id, fallbackName: name)
+        modifier(MusicDestinations())
+    }
+
+    /// Marks a card as the zoom source for the page it opens.
+    func zoomSource(for route: Route?) -> some View {
+        modifier(ZoomSource(route: route))
+    }
+}
+
+private struct MusicDestinations: ViewModifier {
+    @Namespace private var zoom
+
+    func body(content: Content) -> some View {
+        content
+            .environment(\.zoomNamespace, zoom)
+            .navigationDestination(for: Route.self) { route in
+                Group {
+                    switch route {
+                    case let .playlist(id, title): PlaylistDetailView(id: id, fallbackTitle: title)
+                    case let .artist(id, name): ArtistView(id: id, fallbackName: name)
+                    }
+                }
+                .navigationTransition(.zoom(sourceID: route, in: zoom))
+                .environment(\.zoomNamespace, zoom)
             }
+    }
+}
+
+private struct ZoomSource: ViewModifier {
+    let route: Route?
+    @Environment(\.zoomNamespace) private var zoom
+
+    func body(content: Content) -> some View {
+        if let route, let zoom {
+            content.matchedTransitionSource(id: route, in: zoom)
+        } else {
+            content
         }
     }
+}
+
+extension EnvironmentValues {
+    @Entry var zoomNamespace: Namespace.ID?
 }
 
 extension HomeSectionItem {
@@ -38,7 +75,7 @@ final class AppState {
     var isNowPlayingPresented = false
     var isAccountPresented = false
     var signedIn: Bool?
-    // Developer launch argument for screenshots: `-startTab new|radio|library|search`.
+    // Developer launch argument for screenshots: `-startTab radio|library|search`.
     var tab = UserDefaults.standard.string(forKey: "startTab") ?? "home"
     var homePath = NavigationPath()
 

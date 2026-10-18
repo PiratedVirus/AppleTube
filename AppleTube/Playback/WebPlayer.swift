@@ -21,6 +21,11 @@ final class WebPlayer: NSObject {
     private(set) var duration: Double = 0
     private(set) var isAdShowing = false
     private(set) var status = "Idle"
+    /// YouTube Music's own queue (read from the page), the current song's place in it, and its modes.
+    var queue: [QueueItem] = []
+    var queueIndex: Int?
+    var repeatMode: RepeatMode = .off
+    var autoplay = true
 
     @ObservationIgnored let webView: WKWebView
     @ObservationIgnored private var lastLoggedSecond = -5
@@ -37,6 +42,9 @@ final class WebPlayer: NSObject {
         )
         config.userContentController.addUserScript(
             WKUserScript(source: Self.observerScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
+        )
+        config.userContentController.addUserScript(
+            WKUserScript(source: Self.queueScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
         )
         webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 2, height: 2), configuration: config)
         super.init()
@@ -154,14 +162,14 @@ final class WebPlayer: NSObject {
         run("(function(){ const v = document.querySelector('video'); if (v) v.currentTime = \(seconds); })()")
     }
 
-    private func setStatus(_ new: String) {
+    func setStatus(_ new: String) {
         guard new != status else { return }
         status = new
         print("[AppleTube] status: \(new)")
     }
 
-    /// Fire-and-forget; `void` keeps WebKit from trying to bridge a returned Promise.
-    private func run(_ script: String) {
+    /// Fire-and-forget (also used by the queue extension); `void` keeps WebKit from trying to bridge a returned Promise.
+    func run(_ script: String) {
         webView.evaluateJavaScript("void (\(script));") { [weak self] _, error in
             if let error { self?.setStatus("JS error: \(error.localizedDescription)") }
         }
@@ -178,6 +186,9 @@ final class WebPlayer: NSObject {
         artworkURL = (state["art"] as? String).flatMap(URL.init(string:))
         videoId = (state["vid"] as? String).flatMap { $0.isEmpty ? nil : $0 }
         playlistId = (state["list"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+        if isPlaying, !isAdShowing, let videoId {
+            PlaybackHistory.shared.record(videoId: videoId, title: title, artist: artist, artworkURL: artworkURL)
+        }
         setStatus(isAdShowing ? "Ad playing" : (isPlaying ? "Playing" : "Paused"))
         let second = Int(position)
         if second / 5 != lastLoggedSecond / 5 {
@@ -264,6 +275,10 @@ final class WebPlayer: NSObject {
 extension WebPlayer: WKScriptMessageHandler {
     func userContentController(_: WKUserContentController, didReceive message: WKScriptMessage) {
         guard let body = message.body as? [String: Any] else { return }
+        if body["queue"] != nil {
+            applyQueue(body)
+            return
+        }
         if let command = body["cmd"] as? String {
             // A pause from the Lock Screen is deliberate, so stop the auto-resume after locking.
             if command == "pause" { wasPlayingWhenResigned = false }

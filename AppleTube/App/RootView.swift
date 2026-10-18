@@ -1,24 +1,24 @@
 import SwiftUI
 
-/// Apple Music's iOS 26 shell: Home · New · Radio · Library tabs with Search split off on the right,
-/// the mini player floating above the tab bar, and Now Playing as a full-screen sheet.
+/// Apple Music's shell: Home · Radio · Library · Search, the mini player floating above the tab bar, and
+/// Now Playing zooming out of the mini player (drag it back down to close).
 struct RootView: View {
     @State private var app = AppState.shared
+    @Namespace private var playerZoom
 
     var body: some View {
         TabView(selection: $app.tab) {
             Tab("Home", systemImage: "house.fill", value: "home") { HomeView() }
-            Tab("New", systemImage: "square.grid.2x2.fill", value: "new") { NewView() }
             Tab("Radio", systemImage: "dot.radiowaves.left.and.right", value: "radio") { RadioView() }
             Tab("Library", systemImage: "music.note.square.stack.fill", value: "library") { LibraryView() }
             Tab(value: "search", role: .search) { SearchView() }
         }
         .tabBarMinimizeBehavior(.onScrollDown)
-        .tabViewBottomAccessory { MiniPlayer() }
-        .sheet(isPresented: $app.isNowPlayingPresented) {
-            NowPlayingView()
-                .presentationDragIndicator(.hidden)
-                .presentationCornerRadius(38)
+        .tabViewBottomAccessory {
+            MiniPlayer().matchedTransitionSource(id: "nowPlaying", in: playerZoom)
+        }
+        .fullScreenCover(isPresented: $app.isNowPlayingPresented) {
+            NowPlayingView().navigationTransition(.zoom(sourceID: "nowPlaying", in: playerZoom))
         }
         .sheet(isPresented: $app.isAccountPresented) { AccountView() }
         .background(PlayerHost())

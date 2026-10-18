@@ -46,6 +46,7 @@ struct ItemCard: View {
         VStack(alignment: .leading, spacing: 4) {
             ArtworkView(url: item.thumbnailURL, isCircle: { if case .artist = item { true } else { false } }())
                 .frame(width: width)
+                .zoomSource(for: item.route)
             Text(item.title)
                 .font(.subheadline)
                 .lineLimit(1)
@@ -90,6 +91,8 @@ struct SongRow: View {
     var isCurrent = false
     /// Shown when the song carries no artist (e.g. songs inside a search "Top result" artist card).
     var fallbackArtist: String?
+    /// Prefix such as "Song" for search results ("Song · Artist").
+    var kind: String?
     let action: () -> Void
 
     var body: some View {
@@ -118,7 +121,7 @@ struct SongRow: View {
                         }
                     }
                     if let artist = song.artistsDisplay.isEmpty ? fallbackArtist : song.artistsDisplay {
-                        Text(artist)
+                        Text([kind, artist].compactMap { $0 }.joined(separator: " · "))
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
@@ -126,9 +129,7 @@ struct SongRow: View {
                 }
                 Spacer(minLength: 8)
                 Menu {
-                    Button("Start Station", systemImage: "dot.radiowaves.left.and.right") {
-                        WebPlayer.shared.play(videoId: song.videoId, playlistId: "RDAMVM\(song.videoId)")
-                    }
+                    SongActions(song: song)
                 } label: {
                     Image(systemName: "ellipsis")
                         .foregroundStyle(.secondary)
@@ -139,6 +140,54 @@ struct SongRow: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
+        .contextMenu { SongActions(song: song) } preview: { SongPreview(song: song) }
+        // Apple Music: swipe right to Play Next, swipe left to Play Last (only takes effect inside a List).
+        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+            Button { WebPlayer.shared.playNext(videoId: song.videoId) } label: {
+                Label("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward")
+            }
+            .tint(.indigo)
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button { WebPlayer.shared.playLast(videoId: song.videoId) } label: {
+                Label("Play Last", systemImage: "text.line.last.and.arrowtriangle.forward")
+            }
+            .tint(.orange)
+        }
+    }
+}
+
+/// Song actions shared by the ⋯ menu and the long-press menu.
+struct SongActions: View {
+    let song: Song
+
+    var body: some View {
+        Button("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward") { WebPlayer.shared.playNext(videoId: song.videoId) }
+        Button("Play Last", systemImage: "text.line.last.and.arrowtriangle.forward") { WebPlayer.shared.playLast(videoId: song.videoId) }
+        Divider()
+        Button("Start Station", systemImage: "dot.radiowaves.left.and.right") {
+            WebPlayer.shared.play(videoId: song.videoId, playlistId: "RDAMVM\(song.videoId)")
+        }
+        if let album = song.album, album.hasNavigableId {
+            Button("Go to Album", systemImage: "square.stack") { AppState.shared.show(.playlist(id: album.id, title: album.title)) }
+        }
+        if let artist = song.artists.first(where: \.hasNavigableId) {
+            Button("Go to Artist", systemImage: "music.microphone") { AppState.shared.show(.artist(id: artist.id, name: artist.name)) }
+        }
+    }
+}
+
+/// Long-press preview: big artwork with the title underneath, as in Apple Music.
+private struct SongPreview: View {
+    let song: Song
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ArtworkView(url: song.thumbnailURL, cornerRadius: 10, pixelSize: 600).frame(width: 260)
+            Text(song.title).font(.headline).lineLimit(1)
+            Text(song.artistsDisplay).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+        }
+        .padding(16)
     }
 }
 

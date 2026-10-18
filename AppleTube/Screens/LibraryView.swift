@@ -116,7 +116,7 @@ private struct RecentlyAddedGrid: View {
                 if let route = item.route {
                     NavigationLink(value: route) {
                         VStack(alignment: .leading, spacing: 4) {
-                            ArtworkView(url: item.thumbnailURL)
+                            ArtworkView(url: item.thumbnailURL).zoomSource(for: item.route)
                             Text(item.title).font(.subheadline).lineLimit(1)
                             if let subtitle = item.homeCardSubtitle {
                                 Text(subtitle).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
