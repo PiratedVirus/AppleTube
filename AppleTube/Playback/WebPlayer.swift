@@ -28,6 +28,9 @@ final class WebPlayer: NSObject {
             WKUserScript(source: Self.alwaysVisibleScript, injectionTime: .atDocumentStart, forMainFrameOnly: true)
         )
         config.userContentController.addUserScript(
+            WKUserScript(source: Self.lockScreenControlsScript, injectionTime: .atDocumentStart, forMainFrameOnly: true)
+        )
+        config.userContentController.addUserScript(
             WKUserScript(source: Self.observerScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
         )
         webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 2, height: 2), configuration: config)
@@ -135,7 +138,6 @@ final class WebPlayer: NSObject {
         if (window.__appleTubeObserver) return;
         window.__appleTubeObserver = true;
         let last = '';
-        let ticks = 0;
         setInterval(function() {
             const v = document.querySelector('video');
             const md = navigator.mediaSession && navigator.mediaSession.metadata;
@@ -151,26 +153,7 @@ final class WebPlayer: NSObject {
             };
             const key = JSON.stringify(s);
             if (key !== last) { last = key; window.webkit.messageHandlers.player.postMessage(s); }
-            if (++ticks % 4 === 1) applyMediaSessionHandlers();
         }, 500);
-
-        // WebKit builds the Lock Screen controls from the page's Media Session handlers. Without next/previous
-        // handlers it shows ±10s skip buttons, so register track controls (Apple Music style) and drop seeking.
-        // Re-applied every 2s because the YouTube Music app can replace them on track changes.
-        function applyMediaSessionHandlers() {
-            const ms = navigator.mediaSession;
-            if (!ms) return;
-            const click = sel => document.querySelector(sel)?.click();
-            const post = cmd => window.webkit.messageHandlers.player.postMessage({ cmd: cmd });
-            const set = (action, handler) => { try { ms.setActionHandler(action, handler); } catch (e) {} };
-            set('play', () => { document.querySelector('video')?.play(); post('play'); });
-            set('pause', () => { document.querySelector('video')?.pause(); post('pause'); });
-            set('nexttrack', () => click('ytmusic-player-bar .next-button'));
-            set('previoustrack', () => click('ytmusic-player-bar .previous-button'));
-            set('seekto', d => { const v = document.querySelector('video'); if (v && d.seekTime != null) v.currentTime = d.seekTime; });
-            set('seekforward', null);
-            set('seekbackward', null);
-        }
     })();
     """
 
@@ -188,6 +171,34 @@ final class WebPlayer: NSObject {
         document.addEventListener('webkitvisibilitychange', swallow, true);
         window.addEventListener('pagehide', swallow, true);
         window.addEventListener('blur', swallow, true);
+    })();
+    """
+
+    /// WebKit builds the Lock Screen controls from the page's Media Session handlers; with no next/previous
+    /// handlers it shows ±10s skip buttons. Runs at document start so ours are in place before the first track,
+    /// and wraps `setActionHandler` so the YouTube Music web app can't swap them back to seeking later.
+    private static let lockScreenControlsScript = """
+    (function() {
+        const ms = navigator.mediaSession;
+        if (!ms || ms.__appleTubeControls) return;
+        ms.__appleTubeControls = true;
+        const video = () => document.querySelector('video');
+        const click = sel => document.querySelector(sel)?.click();
+        const post = cmd => window.webkit.messageHandlers.player.postMessage({ cmd: cmd });
+        const ours = {
+            play: () => { video()?.play(); post('play'); },
+            pause: () => { video()?.pause(); post('pause'); },
+            nexttrack: () => click('ytmusic-player-bar .next-button'),
+            previoustrack: () => click('ytmusic-player-bar .previous-button'),
+            seekto: d => { const v = video(); if (v && d.seekTime != null) v.currentTime = d.seekTime; },
+            seekforward: null,
+            seekbackward: null
+        };
+        const original = ms.setActionHandler.bind(ms);
+        ms.setActionHandler = function(action, handler) {
+            try { return original(action, action in ours ? ours[action] : handler); } catch (e) {}
+        };
+        for (const action in ours) ms.setActionHandler(action, ours[action]);
     })();
     """
 }
