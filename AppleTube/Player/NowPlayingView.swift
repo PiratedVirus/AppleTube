@@ -2,8 +2,9 @@ import AVKit
 import MediaPlayer
 import SwiftUI
 
-/// Full-screen Now Playing: blurred, colour-shifting artwork background; large artwork that shrinks when
-/// paused; title/artist; scrubber; transport; volume; and lyrics / AirPlay / Up Next buttons.
+/// Now Playing, presented as a sheet so it swipes down like Apple Music's: drifting blurred-artwork background;
+/// large artwork that shrinks when paused; title and tappable artist; scrubber; transport; volume; and
+/// lyrics / AirPlay / Up Next. In lyrics and Up Next the artwork collapses into a compact header.
 struct NowPlayingView: View {
     enum Panel {
         case artwork, lyrics, queue
@@ -18,22 +19,31 @@ struct NowPlayingView: View {
     }
 
     @State private var player = WebPlayer.shared
-    // `-nowPlayingPanel lyrics|queue` opens a panel directly (screenshots/testing).
     @State private var panel = Panel.initial
     @State private var scrubPosition: Double?
+    @State private var song: Song?
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         VStack(spacing: 0) {
-            Capsule()
-                .fill(.white.opacity(0.4))
-                .frame(width: 40, height: 5)
-                .padding(.top, 8)
+            Button { dismiss() } label: {
+                Capsule().fill(.white.opacity(0.45)).frame(width: 40, height: 5)
+                    .frame(maxWidth: .infinity, minHeight: 28)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Close Now Playing")
+
+            if panel != .artwork {
+                compactHeader
+                    .padding(.bottom, 4)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
 
             Group {
                 switch panel {
                 case .artwork: artwork
-                case .lyrics: LyricsPanel(videoId: player.videoId)
+                case .lyrics: LyricsView(player: player)
                 case .queue: QueuePanel(videoId: player.videoId, playlistId: player.playlistId)
                 }
             }
@@ -41,16 +51,23 @@ struct NowPlayingView: View {
 
             if panel == .artwork { titleRow.padding(.bottom, 18) }
             scrubber
-            transport.padding(.vertical, 24)
-            VolumeSlider().frame(height: 34).padding(.bottom, 18)
+            transport.padding(.vertical, panel == .lyrics ? 14 : 24)
+            if panel != .lyrics {
+                VolumeSlider().frame(height: 34).padding(.bottom, 18)
+            }
             bottomButtons
         }
         .padding(.horizontal, 28)
         .padding(.bottom, 8)
         .foregroundStyle(.white)
         .background { NowPlayingBackground(url: player.artworkURL) }
-        .animation(.spring(duration: 0.4), value: panel)
+        .animation(.spring(duration: 0.45, bounce: 0.15), value: panel)
         .preferredColorScheme(.dark)
+        .sensoryFeedback(.impact(weight: .light), trigger: player.isPlaying)
+        .task(id: player.videoId) {
+            song = nil
+            if let videoId = player.videoId { song = await YTMusicAPI.shared.songDetails(videoId: videoId) }
+        }
     }
 
     private var artwork: some View {
@@ -59,6 +76,22 @@ struct NowPlayingView: View {
             .scaleEffect(player.isPlaying ? 1 : 0.82)
             .animation(.spring(duration: 0.5, bounce: 0.25), value: player.isPlaying)
             .padding(.vertical, 24)
+            .transition(.scale(scale: 0.4, anchor: .topLeading).combined(with: .opacity))
+    }
+
+    /// Small artwork + title/artist, shown above lyrics and Up Next (matches Apple's lyrics screen).
+    private var compactHeader: some View {
+        HStack(spacing: 12) {
+            ArtworkView(url: player.artworkURL, cornerRadius: 6, pixelSize: 200)
+                .frame(width: 56)
+                .onTapGesture { panel = .artwork }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(player.title).font(.headline).lineLimit(1)
+                artistButton.font(.subheadline)
+            }
+            Spacer()
+            moreMenu
+        }
     }
 
     private var titleRow: some View {
@@ -67,24 +100,47 @@ struct NowPlayingView: View {
                 Text(player.title.isEmpty ? "Not Playing" : player.title)
                     .font(.title3.bold())
                     .lineLimit(1)
-                Text(player.artist)
-                    .font(.title3)
-                    .opacity(0.7)
-                    .lineLimit(1)
+                artistButton.font(.title3)
             }
             Spacer()
-            Menu {
-                if let videoId = player.videoId {
-                    Button("Start Station", systemImage: "dot.radiowaves.left.and.right") {
-                        player.play(videoId: videoId, playlistId: "RDAMVM\(videoId)")
-                    }
-                }
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.headline)
-                    .frame(width: 34, height: 34)
-                    .background(.white.opacity(0.15), in: .circle)
+            moreMenu
+        }
+    }
+
+    /// Artist name; tapping it closes the player and opens the artist page, as in Apple Music.
+    private var artistButton: some View {
+        Button {
+            if let artist = song?.artists.first(where: \.hasNavigableId) {
+                AppState.shared.show(.artist(id: artist.id, name: artist.name))
             }
+        } label: {
+            Text(player.artist).opacity(0.7).lineLimit(1)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var moreMenu: some View {
+        Menu {
+            if let album = song?.album, album.hasNavigableId {
+                Button("Go to Album", systemImage: "square.stack") {
+                    AppState.shared.show(.playlist(id: album.id, title: album.title))
+                }
+            }
+            if let artist = song?.artists.first(where: \.hasNavigableId) {
+                Button("Go to Artist", systemImage: "music.microphone") {
+                    AppState.shared.show(.artist(id: artist.id, name: artist.name))
+                }
+            }
+            if let videoId = player.videoId {
+                Button("Start Station", systemImage: "dot.radiowaves.left.and.right") {
+                    player.play(videoId: videoId, playlistId: "RDAMVM\(videoId)")
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.headline)
+                .frame(width: 34, height: 34)
+                .background(.white.opacity(0.15), in: .circle)
         }
     }
 
@@ -131,7 +187,7 @@ struct NowPlayingView: View {
             Spacer()
         }
         .font(.system(size: 36))
-        .buttonStyle(.plain)
+        .buttonStyle(PressableStyle())
     }
 
     private var bottomButtons: some View {
@@ -156,11 +212,22 @@ struct NowPlayingView: View {
                 .background(panel == target ? .white.opacity(0.2) : .clear, in: .rect(cornerRadius: 8))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(target == .lyrics ? "Lyrics" : "Up Next")
     }
 
     static func time(_ seconds: Double) -> String {
         let total = Int(seconds.rounded(.down))
         return String(format: "%d:%02d", total / 60, total % 60)
+    }
+}
+
+/// Transport buttons shrink slightly while pressed, like Apple Music's.
+private struct PressableStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.85 : 1)
+            .opacity(configuration.isPressed ? 0.7 : 1)
+            .animation(.spring(duration: 0.2), value: configuration.isPressed)
     }
 }
 
@@ -261,47 +328,6 @@ private struct AirPlayButton: UIViewRepresentable {
     func updateUIView(_: AVRoutePickerView, context _: Context) {}
 }
 
-/// Big bold lyrics, Apple Music style. YouTube Music gives plain lyrics for most songs.
-private struct LyricsPanel: View {
-    let videoId: String?
-    @State private var lyrics: Loadable<Lyrics> = .loading
-
-    var body: some View {
-        ScrollView {
-            switch lyrics {
-            case .loading:
-                ProgressView().tint(.white).padding(.top, 80)
-            case .failed:
-                Text("Lyrics aren't available for this song.").font(.title3.bold()).opacity(0.6).padding(.top, 80)
-            case let .loaded(lyrics):
-                VStack(alignment: .leading, spacing: 18) {
-                    ForEach(Array(lyrics.lines.enumerated()), id: \.offset) { _, line in
-                        Text(line).font(.system(size: 28, weight: .bold))
-                    }
-                    if let source = lyrics.source {
-                        Text(source).font(.footnote).opacity(0.5).padding(.top, 8)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, 24)
-            }
-        }
-        .scrollIndicators(.hidden)
-        .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.08),
-                                     .init(color: .black, location: 0.9), .init(color: .clear, location: 1)],
-                             startPoint: .top, endPoint: .bottom))
-        .task(id: videoId) {
-            guard let videoId else { lyrics = .failed("Nothing playing"); return }
-            lyrics = .loading
-            if let result = try? await YTMusicAPI.shared.lyrics(videoId: videoId), result.isAvailable {
-                lyrics = .loaded(result)
-            } else {
-                lyrics = .failed("Unavailable")
-            }
-        }
-    }
-}
-
 /// Up Next: the radio queue YouTube Music builds from the current song.
 private struct QueuePanel: View {
     let videoId: String?
@@ -310,7 +336,7 @@ private struct QueuePanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Up Next").font(.headline).padding(.top, 16)
+            Text("Up Next").font(.headline).padding(.top, 12)
             ScrollView {
                 LazyVStack(spacing: 10) {
                     ForEach(songs.filter { $0.videoId != videoId }) { song in

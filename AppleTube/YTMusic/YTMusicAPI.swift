@@ -101,6 +101,55 @@ final class YTMusicAPI {
         return LyricsParser.parse(from: try await request("browse", body: ["browseId": browseId]))
     }
 
+    /// Lyrics for the Apple Music-style view, best first: YouTube Music's own timed lyrics, then LRCLIB
+    /// (a free community database, as Kaset uses) for timed lines, then plain text from either.
+    func bestLyrics(videoId: String, title: String, artist: String, duration: Double) async -> LyricResult {
+        let next = try? await request("next", body: Self.nextBody(videoId: videoId, playlistId: nil))
+        if let next, let synced = LyricsParser.extractTimedLyrics(from: next), !synced.isEmpty {
+            return .synced(synced)
+        }
+        let lrclib = await Self.lrclib(title: title, artist: artist, duration: duration)
+        if case .synced = lrclib { return lrclib }
+        if let next, let browseId = LyricsParser.extractLyricsBrowseId(from: next),
+           let data = try? await request("browse", body: ["browseId": browseId]) {
+            let plain = LyricsParser.parse(from: data)
+            if plain.isAvailable { return .plain(plain) }
+        }
+        return lrclib
+    }
+
+    private struct LRCLibTrack: Decodable {
+        let duration: Double?
+        let instrumental: Bool?
+        let plainLyrics: String?
+        let syncedLyrics: String?
+    }
+
+    private static func lrclib(title: String, artist: String, duration: Double) async -> LyricResult {
+        var components = URLComponents(string: "https://lrclib.net/api/search")!
+        components.queryItems = [URLQueryItem(name: "track_name", value: title), URLQueryItem(name: "artist_name", value: artist)]
+        guard let url = components.url else { return .unavailable }
+        var request = URLRequest(url: url)
+        request.setValue("AppleTube/1.0 (personal)", forHTTPHeaderField: "User-Agent")
+        guard let (data, _) = try? await URLSession.shared.data(for: request),
+              let tracks = try? JSONDecoder().decode([LRCLibTrack].self, from: data)
+        else { return .unavailable }
+        // Closest duration wins; versions of a song often differ by intros and outros.
+        let candidates = tracks.filter { $0.instrumental != true && ($0.syncedLyrics != nil || $0.plainLyrics != nil) }
+        let best = candidates.min { abs(($0.duration ?? 0) - duration) < abs(($1.duration ?? 0) - duration) }
+        if let synced = best?.syncedLyrics, let parsed = LRCParser.parse(synced) {
+            return .synced(SyncedLyrics(lines: parsed.lines, source: "LRCLIB"))
+        }
+        if let plain = best?.plainLyrics { return .plain(Lyrics(text: plain, source: "LRCLIB")) }
+        return .unavailable
+    }
+
+    /// Full song info (artist and album IDs) for the playing track, from its Up Next panel.
+    func songDetails(videoId: String) async -> Song? {
+        guard let data = try? await request("next", body: Self.nextBody(videoId: videoId, playlistId: nil)) else { return nil }
+        return RadioQueueParser.parse(from: data).songs.first { $0.videoId == videoId }
+    }
+
     private static func nextBody(videoId: String, playlistId: String?) -> [String: Any] {
         var body: [String: Any] = [
             "videoId": videoId,

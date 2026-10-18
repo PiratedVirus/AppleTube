@@ -4,11 +4,9 @@ import SwiftUI
 /// the mini player floating above the tab bar, and Now Playing as a full-screen sheet.
 struct RootView: View {
     @State private var app = AppState.shared
-    // Developer launch arguments for screenshots: `-startTab new|radio|library|search`.
-    @State private var tab = UserDefaults.standard.string(forKey: "startTab") ?? "home"
 
     var body: some View {
-        TabView(selection: $tab) {
+        TabView(selection: $app.tab) {
             Tab("Home", systemImage: "house.fill", value: "home") { HomeView() }
             Tab("New", systemImage: "square.grid.2x2.fill", value: "new") { NewView() }
             Tab("Radio", systemImage: "dot.radiowaves.left.and.right", value: "radio") { RadioView() }
@@ -17,7 +15,11 @@ struct RootView: View {
         }
         .tabBarMinimizeBehavior(.onScrollDown)
         .tabViewBottomAccessory { MiniPlayer() }
-        .fullScreenCover(isPresented: $app.isNowPlayingPresented) { NowPlayingView() }
+        .sheet(isPresented: $app.isNowPlayingPresented) {
+            NowPlayingView()
+                .presentationDragIndicator(.hidden)
+                .presentationCornerRadius(38)
+        }
         .sheet(isPresented: $app.isAccountPresented) { AccountView() }
         .background(PlayerHost())
         .task {
@@ -25,6 +27,11 @@ struct RootView: View {
             // `-autoplayVideoId <id>` / `-showNowPlaying YES` for automated runs.
             if let id = UserDefaults.standard.string(forKey: "autoplayVideoId") { WebPlayer.shared.load(videoId: id) }
             if UserDefaults.standard.bool(forKey: "showNowPlaying") { app.isNowPlayingPresented = true }
+            // `-thenPlayVideoId <id>` switches track after 30s, to exercise in-page (no reload) track changes.
+            if let next = UserDefaults.standard.string(forKey: "thenPlayVideoId") {
+                try? await Task.sleep(for: .seconds(30))
+                WebPlayer.shared.play(videoId: next, playlistId: nil)
+            }
         }
     }
 }

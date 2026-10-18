@@ -38,6 +38,22 @@ final class AppState {
     var isNowPlayingPresented = false
     var isAccountPresented = false
     var signedIn: Bool?
+    // Developer launch argument for screenshots: `-startTab new|radio|library|search`.
+    var tab = UserDefaults.standard.string(forKey: "startTab") ?? "home"
+    var homePath = NavigationPath()
+
+    /// Closes Now Playing and opens a page on the Home tab (Apple Music does the same from the player).
+    func show(_ route: Route) {
+        isNowPlayingPresented = false
+        tab = "home"
+        homePath.append(route)
+    }
+
+    /// Starts a song from a list and brings up Now Playing.
+    func playAndShow(_ song: Song, playbackListId: String? = nil) {
+        WebPlayer.shared.play(song, playbackListId: playbackListId)
+        isNowPlayingPresented = true
+    }
 
     func refreshSignIn() async {
         signedIn = await WebSession.isSignedIn()

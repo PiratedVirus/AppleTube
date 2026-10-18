@@ -88,7 +88,7 @@ private struct SearchResults: View {
         if !response.songs.isEmpty {
             Section("Songs") {
                 ForEach(response.songs.prefix(8)) { song in
-                    SongRow(song: song, fallbackArtist: response.artists.first?.name) { WebPlayer.shared.play(song) }
+                    SongRow(song: song, fallbackArtist: response.artists.first?.name) { AppState.shared.playAndShow(song) }
                 }
             }
         }

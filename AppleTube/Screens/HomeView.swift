@@ -6,10 +6,10 @@ struct HomeView: View {
     @State private var sections: Loadable<[HomeSection]> = .loading
     @State private var continuation: String?
     @State private var isLoadingMore = false
-    @State private var path = NavigationPath()
+    @State private var app = AppState.shared
 
     var body: some View {
-        NavigationStack(path: $path) {
+        NavigationStack(path: $app.homePath) {
             ScrollView {
                 switch sections {
                 case .loading:
@@ -42,10 +42,10 @@ struct HomeView: View {
             .refreshable { await load() }
             .task {
                 // `-openRoute playlist:<id>` or `artist:<id>` opens a page on launch (screenshots/testing).
-                if path.isEmpty, let raw = UserDefaults.standard.string(forKey: "openRoute") {
+                if app.homePath.isEmpty, let raw = UserDefaults.standard.string(forKey: "openRoute") {
                     let parts = raw.split(separator: ":", maxSplits: 1).map(String.init)
                     if parts.count == 2 {
-                        path.append(parts[0] == "artist" ? Route.artist(id: parts[1], name: "") : Route.playlist(id: parts[1], title: ""))
+                        app.homePath.append(parts[0] == "artist" ? Route.artist(id: parts[1], name: "") : Route.playlist(id: parts[1], title: ""))
                     }
                 }
                 if case .loading = sections { await load() }

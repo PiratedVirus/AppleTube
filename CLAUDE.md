@@ -18,7 +18,7 @@ Personal iOS app: Apple Music-style UI on top of the user's YouTube Music Premiu
 - Refresh fixtures when YouTube changes: `python3 -I Scripts/capture_fixtures.py AppleTubeTests/Fixtures`.
 - Screenshots: `Scripts/screenshot.sh <out.png> <wait> [args]`. Launch args: `-startTab new|radio|library|search`,
   `-openRoute playlist:<id>|artist:<id>`, `-autoplayVideoId <id>`, `-showNowPlaying YES`, `-nowPlayingPanel lyrics|queue`,
-  `-searchQuery <text>`. First launch after install takes ~15s; wait longer for the first shot.
+  `-searchQuery <text>`, `-thenPlayVideoId <id>` (switch track after 30s). First launch after install takes ~15s; wait longer for the first shot.
 - Device: iPhone 15 (UDID 00008120-00066C800E01A01E), iOS 27. Install with `xcrun devicectl device install app`.
   Crash logs: `xcrun devicectl device info files --domain-type systemCrashLogs`.
 

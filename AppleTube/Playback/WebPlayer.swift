@@ -17,6 +17,7 @@ final class WebPlayer: NSObject {
     private(set) var playlistId: String?
     private(set) var isPlaying = false
     private(set) var position: Double = 0
+    @ObservationIgnored private(set) var positionUpdatedAt = Date.now
     private(set) var duration: Double = 0
     private(set) var isAdShowing = false
     private(set) var status = "Idle"
@@ -74,10 +75,12 @@ final class WebPlayer: NSObject {
     }
 
     /// WebKit only plays media for web views that are in a window, so park it there invisibly.
+    /// Also boots music.youtube.com once so later tracks can start without a page load.
     func attach(to window: UIWindow) {
         guard webView.superview !== window else { return }
         window.addSubview(webView)
         window.sendSubviewToBack(webView)
+        if webView.url == nil { webView.load(URLRequest(url: WebSession.origin)) }
     }
 
     func load(videoId: String) {
@@ -87,30 +90,47 @@ final class WebPlayer: NSObject {
     /// Plays a track. With a playlist/album ID the web player queues the rest of it, so next/previous follow
     /// that list; without one, YouTube Music builds a radio queue from the track.
     func play(videoId: String, playlistId: String?) {
-        var components = URLComponents(string: "https://music.youtube.com/watch")!
-        components.queryItems = [URLQueryItem(name: "v", value: videoId)]
-        if let playlistId {
-            components.queryItems?.append(URLQueryItem(name: "list", value: playlistId))
-        }
-        guard let url = components.url else { return }
-        setStatus("Loading…")
-        isPlaying = false
-        webView.load(URLRequest(url: url))
+        var endpoint: [String: Any] = ["videoId": videoId]
+        endpoint["playlistId"] = playlistId
+        start(endpoint)
     }
 
     /// Plays a mix/station by its playlist ID; the web player picks the first track.
     func play(playlistId: String) {
-        var components = URLComponents(string: "https://music.youtube.com/watch")!
-        components.queryItems = [URLQueryItem(name: "list", value: playlistId)]
-        guard let url = components.url else { return }
-        setStatus("Loading…")
-        isPlaying = false
-        webView.load(URLRequest(url: url))
+        start(["playlistId": playlistId])
     }
 
     /// `playbackListId` comes from `YTMusicAPI.playlist(id:)`; nil starts a radio from the song.
     func play(_ song: Song, playbackListId: String? = nil) {
         play(videoId: song.videoId, playlistId: playbackListId)
+    }
+
+    /// Starts a watch endpoint. If the YouTube Music web app is already running, hand it the endpoint
+    /// (`ytmusic-app.resolveCommand`, as Kaset does) so it switches track in place, which takes about a second.
+    /// Otherwise fall back to loading the watch page.
+    private func start(_ endpoint: [String: Any]) {
+        setStatus("Loading…")
+        isPlaying = false
+        Task {
+            let routed = try? await webView.callAsyncJavaScript("""
+                const app = document.querySelector('ytmusic-app');
+                if (!app || typeof app.resolveCommand !== 'function') return false;
+                app.resolveCommand({ watchEndpoint: endpoint });
+                return true;
+                """, arguments: ["endpoint": endpoint], contentWorld: .page)
+            if (routed as? Bool) == true { return }
+            var components = URLComponents(string: "https://music.youtube.com/watch")!
+            components.queryItems = endpoint.compactMap { key, value in
+                (value as? String).map { URLQueryItem(name: key == "videoId" ? "v" : "list", value: $0) }
+            }
+            if let url = components.url { webView.load(URLRequest(url: url)) }
+        }
+    }
+
+    /// Playback position now, extrapolated between the page's twice-a-second updates (for smooth lyrics).
+    func currentPosition(at date: Date = .now) -> Double {
+        guard isPlaying else { return position }
+        return min(position + date.timeIntervalSince(positionUpdatedAt), max(duration, position))
     }
 
     func play() { run("document.querySelector('video')?.play()") }
@@ -129,6 +149,8 @@ final class WebPlayer: NSObject {
     }
 
     func seek(to seconds: Double) {
+        position = seconds
+        positionUpdatedAt = .now
         run("(function(){ const v = document.querySelector('video'); if (v) v.currentTime = \(seconds); })()")
     }
 
@@ -148,6 +170,7 @@ final class WebPlayer: NSObject {
     private func apply(_ state: [String: Any]) {
         isPlaying = state["playing"] as? Bool ?? false
         position = state["t"] as? Double ?? 0
+        positionUpdatedAt = .now
         duration = state["d"] as? Double ?? 0
         isAdShowing = state["ad"] as? Bool ?? false
         title = state["title"] as? String ?? ""
