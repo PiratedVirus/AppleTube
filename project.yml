@@ -6,7 +6,7 @@ options:
 settings:
   base:
     SWIFT_VERSION: "6.0"
-    DEVELOPMENT_TEAM: ""   # set your Apple team ID here (Xcode → Settings → Accounts)
+    DEVELOPMENT_TEAM: F9KW2XLTZ5   # Personal Team (free): device installs expire after 7 days
     CODE_SIGN_STYLE: Automatic
 targets:
   AppleTube:
