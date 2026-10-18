@@ -24,3 +24,26 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.saurabhk.AppleTube
         TARGETED_DEVICE_FAMILY: "1"
+  AppleTubeTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: AppleTubeTests
+        excludes: [Fixtures]
+      - path: AppleTubeTests/Fixtures
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - target: AppleTube
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: dev.saurabhk.AppleTubeTests
+schemes:
+  AppleTube:
+    build:
+      targets:
+        AppleTube: all
+        AppleTubeTests: [test]
+    test:
+      targets: [AppleTubeTests]
