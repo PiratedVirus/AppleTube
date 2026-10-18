@@ -10,7 +10,7 @@ Personal iOS app: Apple Music-style UI on top of the user's YouTube Music Premiu
 
 ## Build
 - `xcodegen generate` after changing `project.yml` (the .xcodeproj is generated, not committed).
-- Simulator: `xcodebuild -project AppleTube.xcodeproj -scheme AppleTube -destination 'platform=iOS Simulator,name=iPhone 17' build`
+- Simulator: `xcodebuild -project AppleTube.xcodeproj -scheme AppleTube -destination 'platform=iOS Simulator,name=iPhone 18 Pro,OS=27.0' -derivedDataPath build build`. Use the iOS 27.0 iPhone 18 Pro sim: the iOS 27.1 runtime only supports the foldable "iPhone Duo", which renders the wide layout.
 - Device: set DEVELOPMENT_TEAM in project.yml, then `-destination 'platform=iOS,name=<iPhone name>'`.
 
 ## Stages
