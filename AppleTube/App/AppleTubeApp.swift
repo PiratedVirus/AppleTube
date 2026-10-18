@@ -2,6 +2,10 @@ import SwiftUI
 
 @main
 struct AppleTubeApp: App {
+    init() {
+        NowPlaying.activateAudioSession()
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()
