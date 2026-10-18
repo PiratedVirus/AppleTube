@@ -1,0 +1,26 @@
+name: AppleTube
+options:
+  bundleIdPrefix: dev.saurabhk
+  deploymentTarget:
+    iOS: "18.0"
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    DEVELOPMENT_TEAM: ""   # set your Apple team ID here (Xcode → Settings → Accounts)
+    CODE_SIGN_STYLE: Automatic
+targets:
+  AppleTube:
+    type: application
+    platform: iOS
+    sources: [AppleTube]
+    info:
+      path: AppleTube/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: AppleTube
+        UILaunchScreen: {}
+        UIBackgroundModes: [audio]
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.saurabhk.AppleTube
+        TARGETED_DEVICE_FAMILY: "1"
