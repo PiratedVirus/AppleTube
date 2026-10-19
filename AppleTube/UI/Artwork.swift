@@ -2,10 +2,6 @@ import CoreImage
 import SwiftUI
 import UIKit
 
-extension Color {
-    /// Apple Music's accent red (#FA2D48).
-    static let musicAccent = Color(red: 0.98, green: 0.18, blue: 0.28)
-}
 
 extension URL {
     /// YouTube artwork URLs carry their size (`=w120-h120…` on googleusercontent/ggpht); ask for a sharper one.
@@ -98,6 +94,11 @@ final class ImageCache: @unchecked Sendable {
     init() { memory.totalCostLimit = 120 << 20 }
 
     func cached(_ url: URL) -> UIImage? { memory.object(forKey: url as NSURL) }
+
+    func clear() {
+        memory.removeAllObjects()
+        session.configuration.urlCache?.removeAllCachedResponses()
+    }
 
     func image(for url: URL) async -> UIImage? {
         if let hit = cached(url) { return hit }

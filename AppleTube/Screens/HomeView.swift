@@ -7,6 +7,7 @@ struct HomeView: View {
     @State private var continuation: String?
     @State private var isLoadingMore = false
     @State private var app = AppState.shared
+    @State private var settings = AppSettings.shared
 
     var body: some View {
         NavigationStack(path: $app.homePath) {
@@ -18,8 +19,8 @@ struct HomeView: View {
                     ErrorView(message: message) { Task { await load() } }
                 case let .loaded(sections):
                     LazyVStack(alignment: .leading, spacing: 28) {
-                        ForEach(Array(sections.enumerated()), id: \.element.id) { index, section in
-                            if index == 0 {
+                        ForEach(Array(settings.arrange(sections).enumerated()), id: \.element.id) { index, section in
+                            if index == 0, settings.largeTopPicks {
                                 TopPicksShelf(section: section)
                             } else {
                                 Shelf(title: section.title) {
@@ -106,6 +107,7 @@ private struct TopPicksShelf: View {
 private struct TopPickCard: View {
     let item: HomeSectionItem
     @State private var tint: Color = .gray
+    @State private var covers = CoverStore.shared
 
     var body: some View {
         Group {
@@ -119,12 +121,29 @@ private struct TopPickCard: View {
         }
         .buttonStyle(.plain)
         .contextMenu { ItemMenu(item: item) }
-        .task { tint = await ArtworkColor.color(for: item.thumbnailURL) ?? .gray }
+        .task(id: generatedStyle) {
+            if let style = generatedStyle {
+                tint = style.colors.last?.mix(with: .black, by: 0.15) ?? .gray
+            } else {
+                tint = await ArtworkColor.color(for: item.thumbnailURL) ?? .gray
+            }
+        }
+    }
+
+    /// Your playlists show their generated cover; the caption panel takes its colour from it.
+    private var generatedStyle: CoverStyle? {
+        guard case let .playlist(playlist) = item,
+              covers.usesGeneratedCover(id: playlist.id, hasArtwork: playlist.thumbnailURL != nil) else { return nil }
+        return covers.style(for: playlist.id)
     }
 
     private var card: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ArtworkView(url: item.thumbnailURL, cornerRadius: 0)
+            if case let .playlist(playlist) = item {
+                PlaylistArtwork(id: playlist.id, title: playlist.title, url: playlist.thumbnailURL, cornerRadius: 0)
+            } else {
+                ArtworkView(url: item.thumbnailURL, cornerRadius: 0)
+            }
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.title).font(.headline).lineLimit(2)
                 if let subtitle = item.homeCardSubtitle {

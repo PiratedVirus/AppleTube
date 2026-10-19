@@ -73,7 +73,7 @@ final class WebPlayer: NSObject {
     }
 
     private func resumeAfterBackgrounding() {
-        guard wasPlayingWhenResigned else { return }
+        guard wasPlayingWhenResigned, AppSettings.shared.resumeAfterLock else { return }
         print("[AppleTube] backgrounded while playing; keeping playback alive")
         Task {
             for delay in [0.3, 1.0, 2.5, 5.0] {

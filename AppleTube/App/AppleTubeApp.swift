@@ -8,8 +8,18 @@ struct AppleTubeApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootView()
-                .tint(Color(red: 0.98, green: 0.18, blue: 0.28)) // Apple Music accent (#FA2D48)
+            ThemedRoot()
         }
+    }
+}
+
+/// Applies the accent colour and theme from Settings to the whole app.
+private struct ThemedRoot: View {
+    @State private var settings = AppSettings.shared
+
+    var body: some View {
+        RootView()
+            .tint(settings.accent.color)
+            .preferredColorScheme(settings.theme.colorScheme)
     }
 }

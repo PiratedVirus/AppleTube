@@ -354,6 +354,11 @@ private struct QueuePanel: View {
                 List {
                     if !pastSongs.isEmpty {
                         Section {
+                            sectionHeader("History") {
+                                Button("Clear") { withAnimation { history.clear() } }
+                                    .font(.body)
+                                    .opacity(0.7)
+                            }
                             ForEach(pastSongs) { entry in
                                 QueueRow(title: entry.title, artist: entry.artist, artworkURL: entry.artworkURL)
                                     .opacity(0.6)
@@ -362,16 +367,16 @@ private struct QueuePanel: View {
                                         SongMenu(song: .minimal(videoId: entry.videoId, title: entry.title, artist: entry.artist, artwork: entry.artworkURL))
                                     }
                             }
-                        } header: {
-                            sectionHeader("History") {
-                                Button("Clear") { withAnimation { history.clear() } }
-                                    .font(.body)
-                                    .opacity(0.7)
-                            }
                         }
                     }
 
                     Section {
+                        sectionHeader(player.autoplay ? "Continue Playing" : "Playing Next") {
+                            if player.autoplay {
+                                Text("Autoplay").font(.subheadline).opacity(0.5)
+                            }
+                        }
+                        .id("playingNext")
                         if upcoming.isEmpty {
                             Text("There's no music in the queue.")
                                 .opacity(0.6)
@@ -393,13 +398,6 @@ private struct QueuePanel: View {
                                     }
                                 }
                         }
-                    } header: {
-                        sectionHeader(player.autoplay ? "Continue Playing" : "Playing Next") {
-                            if player.autoplay {
-                                Text("Autoplay").font(.subheadline).opacity(0.5)
-                            }
-                        }
-                        .id("playingNext")
                     }
                 }
                 .listStyle(.plain)
@@ -419,8 +417,12 @@ private struct QueuePanel: View {
             trailing()
         }
         .foregroundStyle(.white)
-        .textCase(nil)
-        .padding(.vertical, 6)
+        .padding(.top, 14)
+        .padding(.bottom, 2)
+        // A plain row, not a List section header: those are sticky with an opaque system background.
+        .listRowBackground(Color.clear)
+        .listRowInsets(EdgeInsets())
+        .listRowSeparator(.hidden)
     }
 }
 

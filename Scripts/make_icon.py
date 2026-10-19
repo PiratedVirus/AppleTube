@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Draw AppleTube app icon concepts (1024x1024). The app uses "note" (redrawn full-bleed from the user's music-player.png).
-Usage: python3 -I Scripts/make_icon.py <note|groove|pulse|tube> <out.png>"""
+"""Draw AppleTube app icon concepts (1024x1024). The app uses "glassnote": the user's music-player.png note, bolder, with a Liquid Glass finish.
+Usage: python3 -I Scripts/make_icon.py <glassnote|note|groove|pulse|tube> <out.png>"""
 import math, sys
 from PIL import Image, ImageDraw, ImageFilter, ImageChops
 
@@ -163,5 +163,68 @@ def note():
     return fill(img, (235, 215, 220), shade)
 
 
-img = {"note": note, "groove": groove, "pulse": pulse, "tube": tube}[sys.argv[1]]()
+def note_mask(k, stroke, head_r):
+    """The hooked eighth note from the reference, as a mask (geometry measured on 512px)."""
+    def bezier(points, steps=240):
+        out = []
+        for i in range(steps + 1):
+            t = i / steps
+            pts = points
+            while len(pts) > 1:
+                pts = [(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t) for a, b in zip(pts, pts[1:])]
+            out.append(pts[0])
+        return out
+
+    m = Image.new("L", (S, S), 0)
+    d = ImageDraw.Draw(m)
+    def line(pts):
+        pts = [(x * k, y * k) for x, y in pts]
+        for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+            n = max(1, int(((x1 - x0) ** 2 + (y1 - y0) ** 2) ** .5 / 4))
+            for i in range(n + 1):
+                x, y = x0 + (x1 - x0) * i / n, y0 + (y1 - y0) * i / n
+                d.ellipse((x - stroke / 2, y - stroke / 2, x + stroke / 2, y + stroke / 2), fill=255)
+    line([(250, 112), (250, 350)])
+    line(bezier([(250, 112), (300, 168), (366, 196), (352, 256)])
+         + bezier([(352, 256), (342, 292), (310, 296), (294, 294)])[1:])
+    cx, cy = 202 * k, 356 * k
+    d.ellipse((cx - head_r, cy - head_r, cx + head_r, cy + head_r), fill=255)
+    return m
+
+
+def glassnote():
+    """The reference note, bolder, rendered as frosted Liquid Glass over a deep pink→red gradient."""
+    k = S / 512
+    bg = gradient((255, 128, 140), (226, 28, 58), 45)
+    sheen = Image.new("L", (S, S), 0)
+    ImageDraw.Draw(sheen).ellipse((-S * .35, -S * .45, S * .75, S * .5), fill=70)
+    bg = fill(bg, (255, 236, 238), sheen.filter(ImageFilter.GaussianBlur(S * .1)))
+    vignette = Image.new("L", (S, S), 0)
+    ImageDraw.Draw(vignette).ellipse((S * .35, S * .4, S * 1.4, S * 1.4), fill=60)
+    bg = fill(bg, (150, 0, 30), vignette.filter(ImageFilter.GaussianBlur(S * .12)))
+
+    m = note_mask(k, 29 * k, 60 * k)
+    img = shadow(bg, m, 26 * k, 14 * k, .45, (120, 0, 25))
+
+    # Frosted body: the background, blurred and brightened, seen through the glass.
+    frosted = bg.filter(ImageFilter.GaussianBlur(18 * k))
+    frosted = Image.blend(frosted, Image.new("RGB", (S, S), (255, 255, 255)), .8)
+    body = gradient((255, 255, 255), (255, 214, 220), 80)
+    glass = Image.blend(frosted, body, .45)
+    img = Image.composite(glass, img, m)
+
+    # Inner shade low-right and a bright specular rim top-left give the edge thickness.
+    def edge(dx, dy, blur):
+        shifted = ImageChops.offset(m, int(dx * k), int(dy * k))
+        return ImageChops.subtract(m, shifted).filter(ImageFilter.GaussianBlur(blur * k))
+    img = fill(img, (215, 70, 95), edge(-5, -5, 3).point(lambda v: int(v * .55)))
+    img = fill(img, (255, 255, 255), edge(4, 4, 1.2))
+    # A soft gloss band across the upper part of the glass.
+    gloss = Image.new("L", (S, S), 0)
+    ImageDraw.Draw(gloss).ellipse((120 * k, 60 * k, 420 * k, 250 * k), fill=110)
+    gloss = ImageChops.multiply(gloss.filter(ImageFilter.GaussianBlur(30 * k)), m)
+    return fill(img, (255, 255, 255), gloss)
+
+
+img = {"glassnote": glassnote, "note": note, "groove": groove, "pulse": pulse, "tube": tube}[sys.argv[1]]()
 img.resize((1024, 1024), Image.LANCZOS).save(sys.argv[2])

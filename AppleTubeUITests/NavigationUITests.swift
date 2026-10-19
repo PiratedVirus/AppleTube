@@ -67,6 +67,22 @@ final class NavigationUITests: XCTestCase {
         try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "/private/tmp/claude-501/-Users-saurabhkulkarni-Desktop-Other-Desktop/71bfe12a-a05b-457f-9f49-01713bf860ab/scratchpad/ui_cover_editor2.png"))
     }
 
+    /// The profile button opens Settings; Customize Home lists Home's shelves.
+    func testSettingsAndCustomizeHome() {
+        app.launchArguments = []
+        app.launch()
+        let profile = app.buttons["Account and Settings"].firstMatch
+        XCTAssertTrue(profile.waitForExistence(timeout: 15))
+        sleep(6)   // let Home load so its shelves are known
+        profile.tap()
+        XCTAssertTrue(app.staticTexts["Accent Colour"].waitForExistence(timeout: 5), "settings didn't open")
+        try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "/private/tmp/claude-501/-Users-saurabhkulkarni-Desktop-Other-Desktop/71bfe12a-a05b-457f-9f49-01713bf860ab/scratchpad/ui_settings1.png"))
+        app.buttons["Customize Home"].tap()
+        XCTAssertTrue(app.navigationBars["Customize Home"].waitForExistence(timeout: 5))
+        sleep(1)
+        try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "/private/tmp/claude-501/-Users-saurabhkulkarni-Desktop-Other-Desktop/71bfe12a-a05b-457f-9f49-01713bf860ab/scratchpad/ui_settings2.png"))
+    }
+
     /// Tapping the Search tab while on it puts the cursor in the search field.
     func testRetappingSearchTabFocusesField() {
         app.launchArguments = ["-startTab", "search"]

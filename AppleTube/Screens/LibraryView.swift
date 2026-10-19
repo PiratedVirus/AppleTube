@@ -5,6 +5,8 @@ struct LibraryView: View {
     @State private var app = AppState.shared
     @State private var content: Loadable<PlaylistParser.LibraryContent> = .loading
     @State private var playlists: [Playlist] = []
+    @State private var settings = AppSettings.shared
+    @State private var isEditing = false
 
     var body: some View {
         NavigationStack {
@@ -24,7 +26,13 @@ struct LibraryView: View {
                 }
             }
             .navigationTitle("Library")
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { AccountButton() } }
+            .toolbar {
+                if app.signedIn == true {
+                    ToolbarItem(placement: .topBarLeading) { Button("Edit") { isEditing = true } }
+                }
+                ToolbarItem(placement: .topBarTrailing) { AccountButton() }
+            }
+            .sheet(isPresented: $isEditing) { LibraryCategoriesEditor() }
             .musicDestinations()
             .navigationDestination(for: LibraryCategory.self) { LibraryCategoryView(category: $0, content: loadedContent, playlists: playlists) }
             .task(id: app.signedIn) { if app.signedIn == true { await load() } }
@@ -40,7 +48,7 @@ struct LibraryView: View {
     private var library: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                ForEach(LibraryCategory.allCases) { category in
+                ForEach(settings.libraryCategories) { category in
                     NavigationLink(value: category) {
                         HStack {
                             Label(category.title, systemImage: category.symbol)
@@ -57,7 +65,8 @@ struct LibraryView: View {
                     Divider().padding(.leading, 58)
                 }
 
-                Text("Recently Added").font(.title2.bold()).padding(.horizontal).padding(.top, 24).padding(.bottom, 10)
+                Text("Recently Added").font(.title2.bold()).padding(.horizontal)
+                    .padding(.top, settings.libraryCategories.isEmpty ? 4 : 24).padding(.bottom, 10)
                 switch content {
                 case .loading:
                     LoadingView()
@@ -195,6 +204,65 @@ private struct LibraryCategoryView: View {
                 Text(title).lineLimit(1)
                 if let subtitle { Text(subtitle).font(.subheadline).foregroundStyle(.secondary).lineLimit(1) }
             }
+        }
+    }
+}
+
+/// Apple Music's Library "Edit": tick the categories to show and drag to reorder. All can be hidden.
+struct LibraryCategoriesEditor: View {
+    @State private var settings = AppSettings.shared
+    /// false when pushed from Settings (no own navigation stack or Done button).
+    var inSheet = true
+    @State private var order: [LibraryCategory] = []
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        if inSheet {
+            NavigationStack { editor.toolbar { Button("Done") { dismiss() }.bold() } }
+        } else {
+            editor
+        }
+    }
+
+    private var editor: some View {
+            List {
+                Section {
+                    ForEach(order) { category in
+                        Button {
+                            toggle(category)
+                        } label: {
+                            HStack(spacing: 14) {
+                                Image(systemName: settings.libraryCategories.contains(category) ? "checkmark.circle.fill" : "circle")
+                                    .font(.title3)
+                                    .foregroundStyle(settings.libraryCategories.contains(category) ? Color.musicAccent : .secondary)
+                                    .contentTransition(.symbolEffect(.replace))
+                                Label(category.title, systemImage: category.symbol)
+                                    .foregroundStyle(Color(uiColor: .label))
+                            }
+                        }
+                        .accessibilityAddTraits(settings.libraryCategories.contains(category) ? .isSelected : [])
+                    }
+                    .onMove { from, to in
+                        order.move(fromOffsets: from, toOffset: to)
+                        settings.libraryCategories = order.filter(settings.libraryCategories.contains)
+                    }
+                } footer: {
+                    Text("Choose what appears at the top of your Library. Drag to reorder.")
+                }
+            }
+            .environment(\.editMode, .constant(.active))
+            .navigationTitle("Library")
+            .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                order = settings.libraryCategories + LibraryCategory.allCases.filter { !settings.libraryCategories.contains($0) }
+            }
+    }
+
+    private func toggle(_ category: LibraryCategory) {
+        if settings.libraryCategories.contains(category) {
+            settings.libraryCategories.removeAll { $0 == category }
+        } else {
+            settings.libraryCategories = order.filter { settings.libraryCategories.contains($0) || $0 == category }
         }
     }
 }

@@ -31,6 +31,12 @@ final class ResponseCache {
         Task.detached(priority: .background) { try? data.write(to: file, options: .atomic) }
     }
 
+    func removeAll() {
+        memory = [:]
+        try? FileManager.default.removeItem(at: directory)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    }
+
     func remove(key: String) {
         memory[key] = nil
         try? FileManager.default.removeItem(at: path(for: key))

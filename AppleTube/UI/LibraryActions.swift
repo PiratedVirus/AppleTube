@@ -8,7 +8,10 @@ final class LibraryState {
 
     /// Your own playlists (newest first), for "Add to a Playlist" and for generated covers.
     private(set) var editablePlaylists: [Playlist] = []
-    private(set) var ownedPlaylistIds: Set<String> = []
+    /// Remembered across launches so covers are right on the first frame, before the library reloads.
+    private(set) var ownedPlaylistIds: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "ownedPlaylistIds") ?? []) {
+        didSet { UserDefaults.standard.set(Array(ownedPlaylistIds), forKey: "ownedPlaylistIds") }
+    }
     private var liked: [String: Bool] = [:]
     private var inLibrary: [String: Bool] = [:]
     private var saved: [String: Bool] = [:]
@@ -18,8 +21,10 @@ final class LibraryState {
 
     func refreshPlaylists() async {
         guard signedIn else { return }
-        editablePlaylists = await api.editablePlaylists()
-        ownedPlaylistIds = Set(editablePlaylists.map { YTMusicAPI.bareId($0.id) })
+        let playlists = await api.editablePlaylists()
+        guard !playlists.isEmpty else { return }   // a failed fetch shouldn't wipe the remembered list
+        editablePlaylists = playlists
+        ownedPlaylistIds = Set(playlists.map { YTMusicAPI.bareId($0.id) })
     }
 
     func isOwned(_ playlistId: String) -> Bool {

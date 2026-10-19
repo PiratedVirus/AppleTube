@@ -84,13 +84,25 @@ final class AppState {
         isNowPlayingPresented = true
     }
 
+    /// Remembered so the profile photo shows instantly on launch.
+    var account: YTMusicAPI.AccountInfo? = UserDefaults.standard.data(forKey: "account")
+        .flatMap { try? JSONDecoder().decode(YTMusicAPI.AccountInfo.self, from: $0) } {
+        didSet { UserDefaults.standard.set(try? JSONEncoder().encode(account), forKey: "account") }
+    }
+
     func refreshSignIn() async {
         signedIn = await WebSession.isSignedIn()
+        guard signedIn == true else {
+            account = nil
+            return
+        }
+        if let info = await YTMusicAPI.shared.account() { account = info }
         await LibraryState.shared.refreshPlaylists()
     }
 }
 
-/// The round profile button Apple Music puts in each tab's top-right corner.
+/// The round profile button Apple Music puts in each tab's top-right corner: your photo (chosen in Settings,
+/// else your Google photo), else your initial, else a person symbol.
 struct AccountButton: View {
     @State private var app = AppState.shared
 
@@ -98,11 +110,47 @@ struct AccountButton: View {
         Button {
             app.isAccountPresented = true
         } label: {
-            Image(systemName: app.signedIn == true ? "person.crop.circle.fill" : "person.crop.circle.badge.exclamationmark")
-                .font(.title2)
-                .symbolRenderingMode(.hierarchical)
+            ProfileAvatar(size: 34)
         }
-        .accessibilityLabel("Account")
+        .buttonStyle(.plain)
+        .accessibilityLabel("Account and Settings")
+    }
+}
+
+struct ProfileAvatar: View {
+    let size: CGFloat
+    @State private var app = AppState.shared
+    @State private var settings = AppSettings.shared
+
+    var body: some View {
+        Group {
+            if let data = settings.customProfilePhoto, let image = UIImage(data: data) {
+                Image(uiImage: image).resizable().scaledToFill()
+            } else if let url = app.account?.photoURL {
+                CachedImage(url: url) { initials }
+            } else {
+                initials
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(.circle)
+        .overlay(Circle().strokeBorder(.primary.opacity(0.1), lineWidth: 0.5))
+    }
+
+    @ViewBuilder
+    private var initials: some View {
+        if let letter = app.account?.name.first {
+            Text(String(letter).uppercased())
+                .font(.system(size: size * 0.45, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(LinearGradient(colors: [Color.musicAccent.mix(with: .white, by: 0.2), .musicAccent], startPoint: .top, endPoint: .bottom))
+        } else {
+            Image(systemName: app.signedIn == true ? "person.crop.circle.fill" : "person.crop.circle.badge.exclamationmark")
+                .resizable()
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(Color.musicAccent)
+        }
     }
 }
 

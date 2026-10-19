@@ -193,6 +193,32 @@ final class YTMusicAPI {
         }
     }
 
+    struct AccountInfo: Codable, Equatable {
+        let name: String
+        let photoURL: URL?
+    }
+
+    /// Your Google account's name and profile photo (the selected account in YouTube's account switcher).
+    func account() async -> AccountInfo? {
+        try? await load("account/accounts_list", [:], requiresAuth: true, ttl: TTL.library) { data in
+            var accounts: [[String: Any]] = []
+            func walk(_ node: Any) {
+                if let dict = node as? [String: Any] {
+                    if dict["accountName"] != nil, dict["accountPhoto"] != nil { accounts.append(dict) }
+                    dict.values.forEach(walk)
+                } else if let array = node as? [Any] {
+                    array.forEach(walk)
+                }
+            }
+            walk(data)
+            guard let account = accounts.first(where: { $0["isSelected"] as? Bool == true }) ?? accounts.first else { return nil }
+            let runs = (account["accountName"] as? [String: Any])?["runs"] as? [[String: Any]]
+            let name = runs?.compactMap { $0["text"] as? String }.joined() ?? (account["accountName"] as? [String: Any])?["simpleText"] as? String ?? ""
+            let thumbs = (account["accountPhoto"] as? [String: Any])?["thumbnails"] as? [[String: Any]]
+            return AccountInfo(name: name, photoURL: (thumbs?.last?["url"] as? String).flatMap(URL.init(string:)))
+        } ?? nil
+    }
+
     // MARK: - Library edits (request shapes from Kaset's YTMusicClient)
 
     func setLiked(videoId: String, _ liked: Bool) async throws {
@@ -258,6 +284,8 @@ final class YTMusicAPI {
         cache.remove(key: cacheKey("browse", ["browseId": Self.browseId(forPlaylist: id)]))
         invalidateLibrary()
     }
+
+    func clearCache() { cache.removeAll() }
 
     // MARK: - Prefetch
 

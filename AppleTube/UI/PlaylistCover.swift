@@ -86,6 +86,7 @@ final class CoverStore {
     func usesGeneratedCover(id: String, hasArtwork: Bool) -> Bool {
         let bare = YTMusicAPI.bareId(id)
         if let chosen = styles[bare] { return !chosen.useOriginal || !hasArtwork }
+        guard AppSettings.shared.generatedCovers else { return !hasArtwork }
         return !hasArtwork || bare == LikedMusicPlaylist.id || LibraryState.shared.isOwned(bare)
     }
 }
