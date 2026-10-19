@@ -20,7 +20,10 @@ It's a personal project, built to be sideloaded onto your own iPhone with Xcode.
 
 ## Screenshots
 
-<!-- screenshots -->
+<table>
+  <tr><td align="center"><img src="docs/screenshots/home.jpg" width="200" alt="Home"><br><sub>Home</sub></td><td align="center"><img src="docs/screenshots/now-playing.jpg" width="200" alt="Now Playing"><br><sub>Now Playing</sub></td><td align="center"><img src="docs/screenshots/queue.jpg" width="200" alt="Queue"><br><sub>Queue</sub></td><td align="center"><img src="docs/screenshots/song-menu.jpg" width="200" alt="Song menu"><br><sub>Song menu</sub></td></tr>
+  <tr><td align="center"><img src="docs/screenshots/playlist.jpg" width="200" alt="Playlist"><br><sub>Playlist</sub></td><td align="center"><img src="docs/screenshots/library.jpg" width="200" alt="Library"><br><sub>Library</sub></td><td align="center"><img src="docs/screenshots/search.jpg" width="200" alt="Search"><br><sub>Search</sub></td><td align="center"><img src="docs/screenshots/settings.jpg" width="200" alt="Settings"><br><sub>Settings</sub></td></tr>
+</table>
 
 ## Features
 
