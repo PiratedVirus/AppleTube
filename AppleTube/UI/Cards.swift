@@ -28,7 +28,8 @@ struct Shelf<Content: View>: View {
 /// Square artwork with title and subtitle underneath. Songs play on tap; everything else navigates.
 struct ItemCard: View {
     let item: HomeSectionItem
-    var width: CGFloat = 160
+    /// nil fills the available width (grid cells).
+    var width: CGFloat? = 160
 
     var body: some View {
         Group {
@@ -40,13 +41,25 @@ struct ItemCard: View {
         }
         .buttonStyle(.plain)
         .contextMenu { ItemMenu(item: item) }
+        .task {
+            // Warm the page this card opens if it stays on screen for a moment.
+            guard let route = item.route else { return }
+            try? await Task.sleep(for: .milliseconds(600))
+            if !Task.isCancelled { YTMusicAPI.shared.prefetch(route) }
+        }
     }
 
     private var label: some View {
         VStack(alignment: .leading, spacing: 4) {
-            ArtworkView(url: item.thumbnailURL, isCircle: { if case .artist = item { true } else { false } }())
-                .frame(width: width)
-                
+            Group {
+                if case let .playlist(playlist) = item {
+                    PlaylistArtwork(id: playlist.id, title: playlist.title, url: playlist.thumbnailURL)
+                } else {
+                    ArtworkView(url: item.thumbnailURL, isCircle: { if case .artist = item { true } else { false } }())
+                }
+            }
+            .frame(width: width)
+            .frame(maxWidth: width == nil ? .infinity : nil)
             Text(item.title)
                 .font(.subheadline)
                 .lineLimit(1)
@@ -58,28 +71,12 @@ struct ItemCard: View {
             }
         }
         .frame(width: width, alignment: .leading)
+        .frame(maxWidth: width == nil ? .infinity : nil, alignment: .leading)
         .contentShape(.rect)
     }
 
     private func play() {
         if case let .song(song) = item { WebPlayer.shared.play(song) }
-    }
-}
-
-/// Long-press menu shared by cards and rows.
-struct ItemMenu: View {
-    let item: HomeSectionItem
-
-    var body: some View {
-        if let videoId = item.videoId {
-            Button("Play", systemImage: "play.fill") { WebPlayer.shared.play(videoId: videoId, playlistId: nil) }
-            Button("Start Station", systemImage: "dot.radiowaves.left.and.right") {
-                WebPlayer.shared.play(videoId: videoId, playlistId: "RDAMVM\(videoId)")
-            }
-        }
-        if let route = item.route {
-            NavigationLink(value: route) { Label("Open", systemImage: "arrow.up.right") }
-        }
     }
 }
 
@@ -93,6 +90,9 @@ struct SongRow: View {
     var fallbackArtist: String?
     /// Prefix such as "Song" for search results ("Song · Artist").
     var kind: String?
+    /// Extra menu actions for where the row is shown (your playlist, the queue…).
+    var menuContext: SongMenu.Context = .standard
+    var onRemoved: () -> Void = {}
     let action: () -> Void
 
     /// Not a Button: a context menu on a Button inside a List row doesn't open reliably. A plain view with a
@@ -130,7 +130,7 @@ struct SongRow: View {
             }
             Spacer(minLength: 8)
             Menu {
-                SongActions(song: song)
+                SongMenu(song: song, context: menuContext, onRemoved: onRemoved)
             } label: {
                 Image(systemName: "ellipsis")
                     .foregroundStyle(.secondary)
@@ -141,7 +141,7 @@ struct SongRow: View {
         .contentShape(.rect)
         .onTapGesture(perform: action)
         .accessibilityAddTraits(.isButton)
-        .contextMenu { SongActions(song: song) } preview: { SongPreview(song: song) }
+        .contextMenu { SongMenu(song: song, context: menuContext, onRemoved: onRemoved) } preview: { SongPreview(song: song) }
         // Apple Music: swipe right to Play Next, swipe left to Play Last (only takes effect inside a List).
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
             Button { WebPlayer.shared.playNext(videoId: song.videoId) } label: {
@@ -154,26 +154,6 @@ struct SongRow: View {
                 Label("Play Last", systemImage: "text.line.last.and.arrowtriangle.forward")
             }
             .tint(.orange)
-        }
-    }
-}
-
-/// Song actions shared by the ⋯ menu and the long-press menu.
-struct SongActions: View {
-    let song: Song
-
-    var body: some View {
-        Button("Play Next", systemImage: "text.line.first.and.arrowtriangle.forward") { WebPlayer.shared.playNext(videoId: song.videoId) }
-        Button("Play Last", systemImage: "text.line.last.and.arrowtriangle.forward") { WebPlayer.shared.playLast(videoId: song.videoId) }
-        Divider()
-        Button("Start Station", systemImage: "dot.radiowaves.left.and.right") {
-            WebPlayer.shared.play(videoId: song.videoId, playlistId: "RDAMVM\(song.videoId)")
-        }
-        if let album = song.album, album.hasNavigableId {
-            Button("Go to Album", systemImage: "square.stack") { AppState.shared.show(.playlist(id: album.id, title: album.title)) }
-        }
-        if let artist = song.artists.first(where: \.hasNavigableId) {
-            Button("Go to Artist", systemImage: "music.microphone") { AppState.shared.show(.artist(id: artist.id, name: artist.name)) }
         }
     }
 }
@@ -199,9 +179,18 @@ enum Loadable<Value> {
     case loaded(Value)
 }
 
+/// Spinner that only appears if loading takes longer than ~0.3s, so fast (cached) loads never flash it.
 struct LoadingView: View {
+    @State private var visible = false
+
     var body: some View {
-        ProgressView().frame(maxWidth: .infinity, minHeight: 300)
+        ProgressView()
+            .opacity(visible ? 1 : 0)
+            .frame(maxWidth: .infinity, minHeight: 300)
+            .task {
+                try? await Task.sleep(for: .milliseconds(300))
+                withAnimation(.easeIn(duration: 0.2)) { visible = true }
+            }
     }
 }
 

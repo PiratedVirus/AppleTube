@@ -28,14 +28,10 @@ struct ArtworkView: View {
     var body: some View {
         Color.secondary.opacity(0.15)
             .overlay {
-                AsyncImage(url: url?.artwork(size: pixelSize), transaction: Transaction(animation: .easeOut(duration: 0.2))) { phase in
-                    if let image = phase.image {
-                        image.resizable().scaledToFill()
-                    } else {
-                        Image(systemName: "music.note")
-                            .font(.title)
-                            .foregroundStyle(.secondary.opacity(0.6))
-                    }
+                CachedImage(url: url?.artwork(size: pixelSize)) {
+                    Image(systemName: "music.note")
+                        .font(.title)
+                        .foregroundStyle(.secondary.opacity(0.6))
                 }
             }
             .aspectRatio(1, contentMode: .fit)
@@ -58,8 +54,8 @@ enum ArtworkColor {
     static func color(for url: URL?) async -> Color? {
         guard let url else { return nil }
         if let cached = cache[url] { return cached }
-        guard let (data, _) = try? await URLSession.shared.data(from: url.artwork(size: 120)),
-              let image = CIImage(data: data),
+        guard let uiImage = await ImageCache.shared.image(for: url.artwork(size: 120)),
+              let image = CIImage(image: uiImage),
               let rgb = average(of: image)
         else { return nil }
         let color = Color(red: rgb.0, green: rgb.1, blue: rgb.2)
@@ -83,5 +79,51 @@ extension Color {
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0
         resolved.getRed(&r, green: &g, blue: &b, alpha: nil)
         return (0.299 * r + 0.587 * g + 0.114 * b) < 0.6
+    }
+}
+
+/// Decoded artwork kept in memory (and raw bytes on disk via URLCache), so images that were seen once appear
+/// immediately instead of flashing a placeholder. Decoding happens off the main thread.
+final class ImageCache: @unchecked Sendable {
+    static let shared = ImageCache()
+
+    private let memory = NSCache<NSURL, UIImage>()
+    private let session: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.urlCache = URLCache(memoryCapacity: 32 << 20, diskCapacity: 512 << 20)
+        config.requestCachePolicy = .returnCacheDataElseLoad
+        return URLSession(configuration: config)
+    }()
+
+    init() { memory.totalCostLimit = 120 << 20 }
+
+    func cached(_ url: URL) -> UIImage? { memory.object(forKey: url as NSURL) }
+
+    func image(for url: URL) async -> UIImage? {
+        if let hit = cached(url) { return hit }
+        guard let (data, _) = try? await session.data(from: url),
+              let image = await Task.detached(priority: .userInitiated, operation: { UIImage(data: data)?.preparingForDisplay() }).value
+        else { return nil }
+        memory.setObject(image, forKey: url as NSURL, cost: Int(image.size.width * image.size.height * image.scale * image.scale * 4))
+        return image
+    }
+}
+
+struct CachedImage<Placeholder: View>: View {
+    let url: URL?
+    @ViewBuilder var placeholder: Placeholder
+    @State private var loaded: (url: URL, image: UIImage)?
+
+    var body: some View {
+        // A memory hit renders synchronously on the first frame: no placeholder flash.
+        if let url, let image = loaded?.url == url ? loaded?.image : ImageCache.shared.cached(url) {
+            Image(uiImage: image).resizable().scaledToFill()
+        } else {
+            placeholder
+                .task(id: url) {
+                    guard let url, let image = await ImageCache.shared.image(for: url) else { return }
+                    withAnimation(.easeOut(duration: 0.2)) { loaded = (url, image) }
+                }
+        }
     }
 }

@@ -55,12 +55,17 @@ struct HomeView: View {
     }
 
     private func load() async {
+        // Last session's Home first (instant), then fresh.
+        if case .loading = sections, let cached = try? await YTMusicAPI.shared.home(.staleOnly) {
+            sections = .loaded(cached.response.sections.filter { !$0.items.isEmpty })
+            continuation = cached.continuation
+        }
         do {
             let page = try await YTMusicAPI.shared.home()
             sections = .loaded(page.response.sections.filter { !$0.items.isEmpty })
             continuation = page.continuation
         } catch {
-            sections = .failed(error.localizedDescription)
+            if case .loading = sections { sections = .failed(error.localizedDescription) }
         }
     }
 

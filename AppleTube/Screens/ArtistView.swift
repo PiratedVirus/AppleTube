@@ -91,10 +91,13 @@ struct ArtistView: View {
     }
 
     private func load() async {
+        if case .loading = detail, let cached = try? await YTMusicAPI.shared.artist(id: id, .staleOnly) {
+            detail = .loaded(cached)
+        }
         do {
             detail = .loaded(try await YTMusicAPI.shared.artist(id: id))
         } catch {
-            detail = .failed(error.localizedDescription)
+            if case .loading = detail { detail = .failed(error.localizedDescription) }
         }
     }
 }

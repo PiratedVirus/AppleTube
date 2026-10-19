@@ -22,8 +22,11 @@ enum RepeatMode: String {
 extension WebPlayer {
     func jump(toQueueIndex index: Int) { run("window.__atQueue?.jump(\(index))") }
     func removeFromQueue(at index: Int) { run("window.__atQueue?.remove(\(index))") }
-    func playNext(videoId: String) { addToQueue(videoId: videoId, position: "INSERT_AFTER_CURRENT_VIDEO") }
-    func playLast(videoId: String) { addToQueue(videoId: videoId, position: "INSERT_AT_END") }
+    func playNext(videoId: String) { addToQueue(target: ["videoId": videoId], position: "INSERT_AFTER_CURRENT_VIDEO") }
+    func playLast(videoId: String) { addToQueue(target: ["videoId": videoId], position: "INSERT_AT_END") }
+    /// Whole albums/playlists go into the queue in one step (verified: an 11-track album inserts as 11 rows).
+    func playNext(playlistId: String) { addToQueue(target: ["playlistId": playlistId], position: "INSERT_AFTER_CURRENT_VIDEO") }
+    func playLast(playlistId: String) { addToQueue(target: ["playlistId": playlistId], position: "INSERT_AT_END") }
     func shuffleQueue() { run("document.querySelector('ytmusic-player-bar .shuffle')?.click()") }
     func cycleRepeat() { run("document.querySelector('ytmusic-player-bar .repeat')?.click()") }
 
@@ -32,13 +35,15 @@ extension WebPlayer {
         run("(function(){ const t = document.querySelector('#automix'); if (t && t.checked !== \(on)) t.click(); })()")
     }
 
-    /// With nothing playing there is no queue row to borrow a menu from, so just start the song.
-    private func addToQueue(videoId: String, position: String) {
+    /// With nothing playing there is no queue row to borrow a menu from, so just start it.
+    private func addToQueue(target: [String: String], position: String) {
         guard !queue.isEmpty else {
-            play(videoId: videoId, playlistId: nil)
+            if let videoId = target["videoId"] { play(videoId: videoId, playlistId: nil) }
+            if let playlistId = target["playlistId"] { play(playlistId: playlistId) }
             return
         }
-        run("window.__atQueue?.add('\(videoId)', '\(position)')")
+        guard let json = try? JSONSerialization.data(withJSONObject: target), let target = String(data: json, encoding: .utf8) else { return }
+        run("window.__atQueue?.add(\(target), '\(position)')")
     }
 
     func applyQueue(_ body: [String: Any]) {
@@ -68,7 +73,7 @@ extension WebPlayer {
         const rows = () => Array.from(document.querySelectorAll('ytmusic-player-queue-item'));
         const text = t => t && t.runs ? t.runs.map(r => r.text).join('') : '';
 
-        async function clickMenuEntry(row, key, position, retarget) {
+        async function clickMenuEntry(row, key, position, newTarget) {
             const button = row && row.querySelector('ytmusic-menu-renderer #button, ytmusic-menu-renderer button, ytmusic-menu-renderer tp-yt-paper-icon-button');
             if (!button) return false;
             button.click();
@@ -83,11 +88,12 @@ extension WebPlayer {
             }
             if (!entry) { document.body.click(); return false; }
             let restore = null;
-            if (retarget) {
-                const target = entry.data.serviceEndpoint.queueAddEndpoint.queueTarget;
-                const original = target.videoId;
-                target.videoId = retarget;
-                restore = () => { target.videoId = original; };
+            if (newTarget) {
+                // Swap the menu item's target for ours ({videoId} or {playlistId}) just for this click.
+                const endpoint = entry.data.serviceEndpoint.queueAddEndpoint;
+                const original = endpoint.queueTarget;
+                endpoint.queueTarget = newTarget;
+                restore = () => { endpoint.queueTarget = original; };
             }
             entry.click();
             if (restore) setTimeout(restore, 0);
@@ -97,10 +103,10 @@ extension WebPlayer {
         window.__atQueue = {
             jump: i => rows()[i]?.querySelector('ytmusic-play-button-renderer')?.click(),
             remove: i => clickMenuEntry(rows()[i], 'removeFromQueueEndpoint'),
-            add: (videoId, position) => {
+            add: (target, position) => {
                 const list = rows();
                 const row = list.find(r => r.data && r.data.selected) || list[0];
-                return clickMenuEntry(row, 'queueAddEndpoint', position, videoId);
+                return clickMenuEntry(row, 'queueAddEndpoint', position, target);
             }
         };
 

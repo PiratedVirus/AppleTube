@@ -24,6 +24,7 @@ struct RootView: View {
             NowPlayingView().navigationTransition(.zoom(sourceID: "nowPlaying", in: playerZoom))
         }
         .sheet(isPresented: $app.isAccountPresented) { AccountView() }
+        .libraryPrompts()
         .background(PlayerHost())
         .task {
             await app.refreshSignIn()

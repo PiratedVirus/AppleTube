@@ -2,7 +2,8 @@ import SwiftUI
 
 /// Pages any tab can push.
 enum Route: Hashable {
-    case playlist(id: String, title: String)
+    /// `artwork` (from the card that was tapped) lets the page paint its header before the data arrives.
+    case playlist(id: String, title: String, artwork: URL? = nil)
     case artist(id: String, name: String)
 }
 
@@ -12,7 +13,7 @@ extension View {
     func musicDestinations() -> some View {
         navigationDestination(for: Route.self) { route in
             switch route {
-            case let .playlist(id, title): PlaylistDetailView(id: id, fallbackTitle: title)
+            case let .playlist(id, title, artwork): PlaylistDetailView(id: id, fallbackTitle: title, fallbackArtwork: artwork)
             case let .artist(id, name): ArtistView(id: id, fallbackName: name)
             }
         }
@@ -24,8 +25,8 @@ extension HomeSectionItem {
     var route: Route? {
         switch self {
         case .song: nil
-        case let .album(album): .playlist(id: album.id, title: album.title)
-        case let .playlist(playlist): .playlist(id: playlist.id, title: playlist.title)
+        case let .album(album): .playlist(id: album.id, title: album.title, artwork: album.thumbnailURL)
+        case let .playlist(playlist): .playlist(id: playlist.id, title: playlist.title, artwork: playlist.thumbnailURL)
         case let .artist(artist): .artist(id: artist.id, name: artist.name)
         }
     }
@@ -44,6 +45,31 @@ final class AppState {
     var homePath = NavigationPath()
     /// Bumped when the already-selected Search tab is tapped again; SearchView focuses its field.
     var searchFocusRequest = 0
+    var newPlaylistSongs: NewPlaylistRequest?
+    var confirmDelete: DeleteRequest?
+    private(set) var currentToast: Toast?
+    /// Playlist pages close themselves when their playlist is deleted.
+    var deletedPlaylistId: String?
+
+    struct Toast: Equatable {
+        let id = UUID()
+        let message: String
+        let symbol: String
+    }
+
+    /// Apple Music-style HUD confirming an action ("Added to Library").
+    func toast(_ message: String, symbol: String) {
+        let toast = Toast(message: message, symbol: symbol)
+        withAnimation(.spring(duration: 0.35)) { currentToast = toast }
+        Task {
+            try? await Task.sleep(for: .seconds(1.8))
+            if currentToast == toast { withAnimation(.easeOut(duration: 0.25)) { currentToast = nil } }
+        }
+    }
+
+    func popIfShowing(playlistId: String) {
+        deletedPlaylistId = YTMusicAPI.bareId(playlistId)
+    }
 
     /// Closes Now Playing and opens a page on the Home tab (Apple Music does the same from the player).
     func show(_ route: Route) {
@@ -60,6 +86,7 @@ final class AppState {
 
     func refreshSignIn() async {
         signedIn = await WebSession.isSignedIn()
+        await LibraryState.shared.refreshPlaylists()
     }
 }
 
@@ -76,5 +103,59 @@ struct AccountButton: View {
                 .symbolRenderingMode(.hierarchical)
         }
         .accessibilityLabel("Account")
+    }
+}
+
+extension View {
+    /// Toasts and the prompts library actions raise. Applied to the root and to Now Playing (which covers it).
+    func libraryPrompts() -> some View { modifier(LibraryPrompts()) }
+}
+
+private struct LibraryPrompts: ViewModifier {
+    @State private var app = AppState.shared
+    @State private var covers = CoverStore.shared
+    @State private var newName = ""
+
+    func body(content: Content) -> some View {
+        content
+            .overlay(alignment: .top) {
+                if let toast = app.currentToast {
+                    Label(toast.message, systemImage: toast.symbol)
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(2)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 12)
+                        .glassEffect(.regular, in: .capsule)
+                        .padding(.top, 8)
+                        .padding(.horizontal, 24)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .id(toast.id)
+                        .sensoryFeedback(.success, trigger: toast.id)
+                }
+            }
+            .alert("New Playlist", isPresented: Binding(get: { app.newPlaylistSongs != nil }, set: { if !$0 { app.newPlaylistSongs = nil } })) {
+                TextField("Playlist Name", text: $newName)
+                Button("Cancel", role: .cancel) { newName = "" }
+                Button("Create") {
+                    LibraryState.shared.createPlaylist(title: newName, videoIds: app.newPlaylistSongs?.videoIds ?? [])
+                    newName = ""
+                }
+            } message: {
+                if let count = app.newPlaylistSongs?.videoIds.count, count > 0 {
+                    Text(count == 1 ? "The song will be added to it." : "\(count) songs will be added to it.")
+                }
+            }
+            .confirmationDialog("Delete \(app.confirmDelete?.title ?? "playlist")?",
+                                isPresented: Binding(get: { app.confirmDelete != nil }, set: { if !$0 { app.confirmDelete = nil } }),
+                                titleVisibility: .visible) {
+                Button("Delete Playlist", role: .destructive) {
+                    if let request = app.confirmDelete { LibraryState.shared.delete(playlistId: request.playlistId, title: request.title) }
+                }
+            } message: {
+                Text("This deletes it from your YouTube Music account.")
+            }
+            .sheet(item: $covers.editing) { request in
+                EditCoverView(request: request, originalArtwork: covers.originalArtwork[YTMusicAPI.bareId(request.playlistId)])
+            }
     }
 }

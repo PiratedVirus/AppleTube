@@ -42,7 +42,29 @@ final class NavigationUITests: XCTestCase {
         song.press(forDuration: 1.2)
         XCTAssertTrue(app.buttons["Play Next"].waitForExistence(timeout: 5), "context menu didn't open")
         XCTAssertTrue(app.buttons["Play Last"].exists)
-        XCTAssertTrue(app.buttons["Start Station"].exists)
+        XCTAssertTrue(app.buttons["Create Station"].exists)
+        XCTAssertTrue(app.buttons["Share Song…"].exists)
+    }
+
+    /// A playlist's ⋯ menu offers Edit Cover, and the editor shows the generated cover.
+    func testPlaylistMenuOpensCoverEditor() {
+        app.launchArguments = ["-openRoute", "playlist:VLPLWifY4ZVngjfsRWcaplbD2m1muE3b5Wn-"]
+        app.launch()
+        let more = app.buttons["More"].firstMatch
+        XCTAssertTrue(more.waitForExistence(timeout: 30), "no ⋯ button on the playlist page")
+        sleep(3)
+        more.tap()
+        XCTAssertTrue(app.buttons["Play Next"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Share Playlist…"].exists)
+        try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "/private/tmp/claude-501/-Users-saurabhkulkarni-Desktop-Other-Desktop/71bfe12a-a05b-457f-9f49-01713bf860ab/scratchpad/ui_playlist_menu.png"))
+        app.buttons["Edit Cover…"].tap()
+        XCTAssertTrue(app.navigationBars["Edit Cover"].waitForExistence(timeout: 5), "cover editor didn't open")
+        app.switches["Use Original Artwork"].firstMatch.tap()
+        sleep(1)
+        try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "/private/tmp/claude-501/-Users-saurabhkulkarni-Desktop-Other-Desktop/71bfe12a-a05b-457f-9f49-01713bf860ab/scratchpad/ui_cover_editor.png"))
+        app.buttons["Lavender"].tap()
+        sleep(1)
+        try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "/private/tmp/claude-501/-Users-saurabhkulkarni-Desktop-Other-Desktop/71bfe12a-a05b-457f-9f49-01713bf860ab/scratchpad/ui_cover_editor2.png"))
     }
 
     /// Tapping the Search tab while on it puts the cursor in the search field.

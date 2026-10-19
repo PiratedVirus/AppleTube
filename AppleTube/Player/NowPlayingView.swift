@@ -65,6 +65,7 @@ struct NowPlayingView: View {
         .background { NowPlayingBackground(url: player.artworkURL) }
         .animation(.spring(duration: 0.45, bounce: 0.15), value: panel)
         .preferredColorScheme(.dark)
+        .libraryPrompts()
         .sensoryFeedback(.impact(weight: .light), trigger: player.isPlaying)
         .task(id: player.videoId) {
             song = nil
@@ -124,20 +125,9 @@ struct NowPlayingView: View {
 
     private var moreMenu: some View {
         Menu {
-            if let album = song?.album, album.hasNavigableId {
-                Button("Go to Album", systemImage: "square.stack") {
-                    AppState.shared.show(.playlist(id: album.id, title: album.title))
-                }
-            }
-            if let artist = song?.artists.first(where: \.hasNavigableId) {
-                Button("Go to Artist", systemImage: "music.microphone") {
-                    AppState.shared.show(.artist(id: artist.id, name: artist.name))
-                }
-            }
-            if let videoId = player.videoId {
-                Button("Start Station", systemImage: "dot.radiowaves.left.and.right") {
-                    player.play(videoId: videoId, playlistId: "RDAMVM\(videoId)")
-                }
+            // Full details once loaded (album/artist links, library state); a minimal song until then.
+            if let current = song ?? player.videoId.map({ Song.minimal(videoId: $0, title: player.title, artist: player.artist, artwork: player.artworkURL) }) {
+                SongMenu(song: current, context: .nowPlaying)
             }
         } label: {
             Image(systemName: "ellipsis")
@@ -368,6 +358,9 @@ private struct QueuePanel: View {
                                 QueueRow(title: entry.title, artist: entry.artist, artworkURL: entry.artworkURL)
                                     .opacity(0.6)
                                     .onTapGesture { player.play(videoId: entry.videoId, playlistId: nil) }
+                                    .contextMenu {
+                                        SongMenu(song: .minimal(videoId: entry.videoId, title: entry.title, artist: entry.artist, artwork: entry.artworkURL))
+                                    }
                             }
                         } header: {
                             sectionHeader("History") {
@@ -388,6 +381,10 @@ private struct QueuePanel: View {
                         ForEach(upcoming, id: \.element.id) { index, item in
                             QueueRow(title: item.title, artist: item.artist, artworkURL: item.artworkURL)
                                 .onTapGesture { player.jump(toQueueIndex: index) }
+                                .contextMenu {
+                                    SongMenu(song: .minimal(videoId: item.videoId, title: item.title, artist: item.artist, artwork: item.artworkURL),
+                                             context: .queue(index: index))
+                                }
                                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                     Button(role: .destructive) {
                                         player.removeFromQueue(at: index)

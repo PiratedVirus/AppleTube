@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Draw AppleTube app icon concepts (1024x1024). The app uses "pulse".
-Usage: python3 -I Scripts/make_icon.py <groove|pulse|tube> <out.png>"""
+"""Draw AppleTube app icon concepts (1024x1024). The app uses "note" (redrawn full-bleed from the user's music-player.png).
+Usage: python3 -I Scripts/make_icon.py <note|groove|pulse|tube> <out.png>"""
 import math, sys
 from PIL import Image, ImageDraw, ImageFilter, ImageChops
 
@@ -118,5 +118,50 @@ def tube():
     return fill(img, (255, 255, 255), gloss.filter(ImageFilter.GaussianBlur(10 * U)))
 
 
-img = {"groove": groove, "pulse": pulse, "tube": tube}[sys.argv[1]]()
+def note():
+    """Hooked eighth note on a pink→red diagonal gradient, full-bleed (iOS applies the rounded mask)."""
+    k = S / 512  # geometry measured on the 512px reference
+    img = gradient((255, 168, 170), (255, 56, 58), 45)
+    glow = Image.new("L", (S, S), 0)
+    ImageDraw.Draw(glow).ellipse((-S * .25, -S * .25, S * .6, S * .6), fill=28)
+    img = fill(img, (255, 255, 255), glow.filter(ImageFilter.GaussianBlur(S * .1)))
+
+    def bezier(points, steps=200):
+        out = []
+        for i in range(steps + 1):
+            t = i / steps
+            pts = points
+            while len(pts) > 1:
+                pts = [(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t) for a, b in zip(pts, pts[1:])]
+            out.append(pts[0])
+        return out
+
+    stroke = 10.5 * k
+    glyph = Image.new("L", (S, S), 0)
+    d = ImageDraw.Draw(glyph)
+    def line(pts):
+        # Stamp round dots densely along the path: smooth curves with round caps, no joint artefacts.
+        pts = [(x * k, y * k) for x, y in pts]
+        for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+            n = max(1, int(((x1 - x0) ** 2 + (y1 - y0) ** 2) ** .5 / 4))
+            for i in range(n + 1):
+                x, y = x0 + (x1 - x0) * i / n, y0 + (y1 - y0) * i / n
+                d.ellipse((x - stroke / 2, y - stroke / 2, x + stroke / 2, y + stroke / 2), fill=255)
+    line([(245, 116), (245, 352)])                                     # stem
+    line(bezier([(245, 116), (290, 170), (352, 198), (341, 252)])
+         + bezier([(341, 252), (333, 282), (305, 284), (292, 283)])[1:])  # flag
+    head = Image.new("L", (S, S), 0)
+    cx, cy, r = 205 * k, 357 * k, 45 * k
+    ImageDraw.Draw(head).ellipse((cx - r, cy - r, cx + r, cy + r), fill=255)
+    img = shadow(img, ImageChops.lighter(glyph, head), 14 * k, 8 * k, .28, (150, 20, 30))
+    img = fill(img, (255, 255, 255), glyph)
+    img = fill(img, (255, 255, 255), head)
+    # faint shading low-right on the note head, as in the reference
+    shade = Image.new("L", (S, S), 0)
+    ImageDraw.Draw(shade).ellipse((cx - r * .2, cy - r * .2, cx + r * 1.4, cy + r * 1.4), fill=40)
+    shade = ImageChops.multiply(shade.filter(ImageFilter.GaussianBlur(12 * k)), head)
+    return fill(img, (235, 215, 220), shade)
+
+
+img = {"note": note, "groove": groove, "pulse": pulse, "tube": tube}[sys.argv[1]]()
 img.resize((1024, 1024), Image.LANCZOS).save(sys.argv[2])

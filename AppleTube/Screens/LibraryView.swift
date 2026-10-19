@@ -73,14 +73,20 @@ struct LibraryView: View {
     }
 
     private func load() async {
+        // Last session's library first (instant), then fresh.
+        if case .loading = content, let cached = try? await YTMusicAPI.shared.libraryLanding(.staleOnly) {
+            playlists = (try? await YTMusicAPI.shared.libraryPlaylists(.staleOnly)) ?? cached.playlists
+            content = .loaded(cached)
+        }
         do {
             async let landing = YTMusicAPI.shared.libraryLanding()
             async let lists = YTMusicAPI.shared.libraryPlaylists()
             let (content, playlists) = try await (landing, lists)
             self.playlists = playlists.isEmpty ? content.playlists : playlists
             self.content = .loaded(content)
+            await LibraryState.shared.refreshPlaylists()
         } catch {
-            content = .failed(error.localizedDescription)
+            if case .loading = content { content = .failed(error.localizedDescription) }
         }
     }
 }
@@ -117,20 +123,7 @@ private struct RecentlyAddedGrid: View {
     var body: some View {
         let items: [HomeSectionItem] = albums.map { .album($0) } + playlists.map { .playlist($0) }
         LazyVGrid(columns: columns, alignment: .leading, spacing: 18) {
-            ForEach(items.prefix(20)) { item in
-                if let route = item.route {
-                    NavigationLink(value: route) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            ArtworkView(url: item.thumbnailURL)
-                            Text(item.title).font(.subheadline).lineLimit(1)
-                            if let subtitle = item.homeCardSubtitle {
-                                Text(subtitle).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
-                            }
-                        }
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
+            ForEach(items.prefix(20)) { ItemCard(item: $0, width: nil) }
         }
     }
 }
@@ -145,22 +138,44 @@ private struct LibraryCategoryView: View {
         List {
             switch category {
             case .playlists:
-                ForEach(playlists) { playlist in
-                    NavigationLink(value: Route.playlist(id: playlist.id, title: playlist.title)) {
-                        row(url: playlist.thumbnailURL, title: playlist.title, subtitle: playlist.author?.name)
+                Button { LibraryState.shared.newPlaylist(with: []) } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "plus")
+                            .font(.title2)
+                            .foregroundStyle(Color.musicAccent)
+                            .frame(width: 56, height: 56)
+                            .background(Color.secondary.opacity(0.12), in: .rect(cornerRadius: 6))
+                        Text("New Playlist…").foregroundStyle(Color.musicAccent)
                     }
+                }
+                ForEach(playlists) { playlist in
+                    NavigationLink(value: Route.playlist(id: playlist.id, title: playlist.title, artwork: playlist.thumbnailURL)) {
+                        HStack(spacing: 12) {
+                            PlaylistArtwork(id: playlist.id, title: playlist.title, url: playlist.thumbnailURL, cornerRadius: 6, pixelSize: 160)
+                                .frame(width: 56)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(playlist.title).lineLimit(1)
+                                if let author = playlist.author?.name {
+                                    Text(author).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                                }
+                            }
+                        }
+                    }
+                    .contextMenu { ItemMenu(item: .playlist(playlist)) }
                 }
             case .artists:
                 ForEach(content?.artists ?? []) { artist in
                     NavigationLink(value: Route.artist(id: artist.id, name: artist.name)) {
                         row(url: artist.thumbnailURL, title: artist.name, subtitle: nil, circle: true)
                     }
+                    .contextMenu { ArtistMenu(artist: artist) }
                 }
             case .albums:
                 ForEach(content?.albums ?? []) { album in
-                    NavigationLink(value: Route.playlist(id: album.id, title: album.title)) {
+                    NavigationLink(value: Route.playlist(id: album.id, title: album.title, artwork: album.thumbnailURL)) {
                         row(url: album.thumbnailURL, title: album.title, subtitle: album.artistsDisplay)
                     }
+                    .contextMenu { ItemMenu(item: .album(album)) }
                 }
             case .songs:
                 // Liked songs are YouTube Music's "LM" playlist.

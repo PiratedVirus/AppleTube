@@ -156,13 +156,16 @@ private struct ResultRow: View {
                 AppState.shared.playAndShow(song)
             }
         case let .album(album), let .audiobook(album):
-            link(.playlist(id: album.id, title: album.title), url: album.thumbnailURL, title: album.title,
+            link(.playlist(id: album.id, title: album.title, artwork: album.thumbnailURL), url: album.thumbnailURL, title: album.title,
                  subtitle: ["Album", album.artistsDisplay].filter { !$0.isEmpty }.joined(separator: " · "))
+                .contextMenu { ItemMenu(item: .album(album)) }
         case let .artist(artist), let .profile(artist):
             link(.artist(id: artist.id, name: artist.name), url: artist.thumbnailURL, title: artist.name, subtitle: "Artist", circle: true)
+                .contextMenu { ArtistMenu(artist: artist) }
         case let .playlist(playlist):
-            link(.playlist(id: playlist.id, title: playlist.title), url: playlist.thumbnailURL, title: playlist.title,
+            link(.playlist(id: playlist.id, title: playlist.title, artwork: playlist.thumbnailURL), url: playlist.thumbnailURL, title: playlist.title,
                  subtitle: ["Playlist", playlist.author?.name].compactMap { $0 }.joined(separator: " · "))
+                .contextMenu { ItemMenu(item: .playlist(playlist)) }
         default:
             EmptyView()
         }
@@ -233,12 +236,12 @@ private struct LibraryResults: View {
             LoadingView().listRowSeparator(.hidden)
         } else {
             ForEach(playlists.filter { match($0.title) }) { playlist in
-                NavigationLink(value: Route.playlist(id: playlist.id, title: playlist.title)) {
+                NavigationLink(value: Route.playlist(id: playlist.id, title: playlist.title, artwork: playlist.thumbnailURL)) {
                     ResultLabel(url: playlist.thumbnailURL, title: playlist.title, subtitle: "Playlist")
                 }
             }
             ForEach((content?.albums ?? []).filter { match($0.title) || match($0.artistsDisplay) }) { album in
-                NavigationLink(value: Route.playlist(id: album.id, title: album.title)) {
+                NavigationLink(value: Route.playlist(id: album.id, title: album.title, artwork: album.thumbnailURL)) {
                     ResultLabel(url: album.thumbnailURL, title: album.title, subtitle: "Album · \(album.artistsDisplay)")
                 }
             }
@@ -268,7 +271,7 @@ final class RecentSearches {
         var isCircle = false
 
         var route: Route? {
-            if let playlistId { return .playlist(id: playlistId, title: title) }
+            if let playlistId { return .playlist(id: playlistId, title: title, artwork: artworkURL) }
             if let artistId { return .artist(id: artistId, name: title) }
             return nil
         }
@@ -288,7 +291,7 @@ final class RecentSearches {
             self.artworkURL = artworkURL
             isCircle = circle
             switch route {
-            case let .playlist(id, _):
+            case let .playlist(id, _, _):
                 self.id = "playlist:\(id)"
                 playlistId = id
             case let .artist(id, _):
