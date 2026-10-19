@@ -46,7 +46,7 @@ struct ItemCard: View {
         VStack(alignment: .leading, spacing: 4) {
             ArtworkView(url: item.thumbnailURL, isCircle: { if case .artist = item { true } else { false } }())
                 .frame(width: width)
-                .zoomSource(for: item.route)
+                
             Text(item.title)
                 .font(.subheadline)
                 .lineLimit(1)
@@ -95,51 +95,52 @@ struct SongRow: View {
     var kind: String?
     let action: () -> Void
 
+    /// Not a Button: a context menu on a Button inside a List row doesn't open reliably. A plain view with a
+    /// tap gesture gets Apple Music's long-press menu and preview.
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                if let index, !showsArtwork {
-                    Group {
-                        if isCurrent {
-                            Image(systemName: "waveform").foregroundStyle(Color.musicAccent).symbolEffect(.variableColor.iterative)
-                        } else {
-                            Text("\(index)").foregroundStyle(.secondary)
-                        }
-                    }
-                    .font(.subheadline)
-                    .frame(width: 24)
-                } else if showsArtwork {
-                    ArtworkView(url: song.thumbnailURL, cornerRadius: 5, pixelSize: 120)
-                        .frame(width: 48)
-                }
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 4) {
-                        Text(song.title).lineLimit(1)
-                            .foregroundStyle(isCurrent ? Color.musicAccent : .primary)
-                        if song.isExplicit == true {
-                            Image(systemName: "e.square.fill").font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                    if let artist = song.artistsDisplay.isEmpty ? fallbackArtist : song.artistsDisplay {
-                        Text([kind, artist].compactMap { $0 }.joined(separator: " · "))
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
+        HStack(spacing: 12) {
+            if let index, !showsArtwork {
+                Group {
+                    if isCurrent {
+                        Image(systemName: "waveform").foregroundStyle(Color.musicAccent).symbolEffect(.variableColor.iterative)
+                    } else {
+                        Text("\(index)").foregroundStyle(.secondary)
                     }
                 }
-                Spacer(minLength: 8)
-                Menu {
-                    SongActions(song: song)
-                } label: {
-                    Image(systemName: "ellipsis")
+                .font(.subheadline)
+                .frame(width: 24)
+            } else if showsArtwork {
+                ArtworkView(url: song.thumbnailURL, cornerRadius: 5, pixelSize: 120)
+                    .frame(width: 48)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 4) {
+                    Text(song.title).lineLimit(1)
+                        .foregroundStyle(isCurrent ? Color.musicAccent : .primary)
+                    if song.isExplicit == true {
+                        Image(systemName: "e.square.fill").font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                if let artist = song.artistsDisplay.isEmpty ? fallbackArtist : song.artistsDisplay {
+                    Text([kind, artist].compactMap { $0 }.joined(separator: " · "))
+                        .font(.subheadline)
                         .foregroundStyle(.secondary)
-                        .frame(width: 32, height: 32)
-                        .contentShape(.rect)
+                        .lineLimit(1)
                 }
             }
-            .contentShape(.rect)
+            Spacer(minLength: 8)
+            Menu {
+                SongActions(song: song)
+            } label: {
+                Image(systemName: "ellipsis")
+                    .foregroundStyle(.secondary)
+                    .frame(width: 32, height: 32)
+                    .contentShape(.rect)
+            }
         }
-        .buttonStyle(.plain)
+        .contentShape(.rect)
+        .onTapGesture(perform: action)
+        .accessibilityAddTraits(.isButton)
         .contextMenu { SongActions(song: song) } preview: { SongPreview(song: song) }
         // Apple Music: swipe right to Play Next, swipe left to Play Last (only takes effect inside a List).
         .swipeActions(edge: .leading, allowsFullSwipe: true) {

@@ -35,11 +35,7 @@ struct LyricsView: View {
             return
         }
         result = .loading
-        // Strip "(feat. …)", "[Official Video]" etc. so LRCLIB can match the title.
-        let title = player.title.replacingOccurrences(of: #"\s*[\(\[].*?[\)\]]"#, with: "", options: .regularExpression)
-        let artist = player.artist.components(separatedBy: CharacterSet(charactersIn: ",&")).first?
-            .trimmingCharacters(in: .whitespaces) ?? player.artist
-        result = .loaded(await YTMusicAPI.shared.bestLyrics(videoId: videoId, title: title, artist: artist, duration: player.duration))
+        result = .loaded(await LyricsFinder.find(videoId: videoId, title: player.title, artist: player.artist, duration: player.duration))
     }
 }
 

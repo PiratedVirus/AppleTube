@@ -47,11 +47,52 @@ final class YTMusicAPI {
 
     /// Albums (`MPREb_…`) and playlists both load through browse; plain playlist IDs need the `VL` prefix.
     /// `playbackListId` is what the web player queues: an album's `OLAK5uy_…` list, or the bare playlist ID.
-    func playlist(id: String) async throws -> (response: PlaylistTracksResponse, playbackListId: String?) {
+    func playlist(id: String) async throws -> PlaylistPage {
         let loadsAsIs = id.hasPrefix("VL") || id.hasPrefix("RD") || id.hasPrefix("MPRE") || id.hasPrefix("UC")
+        // Your own playlists need the account even though public ones don't.
         let data = try await request("browse", body: ["browseId": loadsAsIs ? id : "VL\(id)"])
         let listId = id.hasPrefix("MPRE") ? Self.albumPlaybackListId(in: data) : (id.hasPrefix("VL") ? String(id.dropFirst(2)) : id)
-        return (PlaylistParser.parsePlaylistWithContinuation(data, playlistId: id), listId)
+        let header = Self.anyHeader(in: data)
+        return PlaylistPage(response: PlaylistParser.parsePlaylistWithContinuation(data, playlistId: id), playbackListId: listId,
+                            headerTitle: header.title, headerArtworkURL: header.artwork)
+    }
+
+    struct PlaylistPage {
+        let response: PlaylistTracksResponse
+        let playbackListId: String?
+        /// From any `…HeaderRenderer` in the response, for header formats the parser doesn't know.
+        let headerTitle: String?
+        let headerArtworkURL: URL?
+    }
+
+    /// Title and largest artwork of the first `…HeaderRenderer` anywhere in a browse response.
+    nonisolated static func anyHeader(in data: [String: Any]) -> (title: String?, artwork: URL?) {
+        func find(_ node: Any) -> [String: Any]? {
+            if let dict = node as? [String: Any] {
+                for (key, value) in dict where key.hasSuffix("HeaderRenderer") {
+                    if let renderer = value as? [String: Any], renderer["title"] != nil { return renderer }
+                }
+                for value in dict.values { if let hit = find(value) { return hit } }
+            } else if let array = node as? [Any] {
+                for value in array { if let hit = find(value) { return hit } }
+            }
+            return nil
+        }
+        func thumbnail(_ node: Any) -> URL? {
+            if let dict = node as? [String: Any] {
+                if let thumbs = dict["thumbnails"] as? [[String: Any]], let url = thumbs.last?["url"] as? String {
+                    return URL(string: url)
+                }
+                for value in dict.values { if let hit = thumbnail(value) { return hit } }
+            } else if let array = node as? [Any] {
+                for value in array { if let hit = thumbnail(value) { return hit } }
+            }
+            return nil
+        }
+        guard let header = find(data) else { return (nil, nil) }
+        let runs = (header["title"] as? [String: Any])?["runs"] as? [[String: Any]]
+        let title = runs?.compactMap { $0["text"] as? String }.joined()
+        return (title?.isEmpty == false ? title : nil, thumbnail(header))
     }
 
     /// Every track row on an album page plays with the album's `OLAK5uy_…` list; pick the most common one in
@@ -101,46 +142,15 @@ final class YTMusicAPI {
         return LyricsParser.parse(from: try await request("browse", body: ["browseId": browseId]))
     }
 
-    /// Lyrics for the Apple Music-style view, best first: YouTube Music's own timed lyrics, then LRCLIB
-    /// (a free community database, as Kaset uses) for timed lines, then plain text from either.
-    func bestLyrics(videoId: String, title: String, artist: String, duration: Double) async -> LyricResult {
-        let next = try? await request("next", body: Self.nextBody(videoId: videoId, playlistId: nil))
-        if let next, let synced = LyricsParser.extractTimedLyrics(from: next), !synced.isEmpty {
-            return .synced(synced)
-        }
-        let lrclib = await Self.lrclib(title: title, artist: artist, duration: duration)
-        if case .synced = lrclib { return lrclib }
-        if let next, let browseId = LyricsParser.extractLyricsBrowseId(from: next),
+    /// YouTube Music's own lyrics for a track: timed if it has them, else plain. See LyricsFinder for fallbacks.
+    func youTubeLyrics(videoId: String) async -> LyricResult {
+        guard let next = try? await request("next", body: Self.nextBody(videoId: videoId, playlistId: nil)) else { return .unavailable }
+        if let synced = LyricsParser.extractTimedLyrics(from: next), !synced.isEmpty { return .synced(synced) }
+        if let browseId = LyricsParser.extractLyricsBrowseId(from: next),
            let data = try? await request("browse", body: ["browseId": browseId]) {
             let plain = LyricsParser.parse(from: data)
             if plain.isAvailable { return .plain(plain) }
         }
-        return lrclib
-    }
-
-    private struct LRCLibTrack: Decodable {
-        let duration: Double?
-        let instrumental: Bool?
-        let plainLyrics: String?
-        let syncedLyrics: String?
-    }
-
-    private static func lrclib(title: String, artist: String, duration: Double) async -> LyricResult {
-        var components = URLComponents(string: "https://lrclib.net/api/search")!
-        components.queryItems = [URLQueryItem(name: "track_name", value: title), URLQueryItem(name: "artist_name", value: artist)]
-        guard let url = components.url else { return .unavailable }
-        var request = URLRequest(url: url)
-        request.setValue("AppleTube/1.0 (personal)", forHTTPHeaderField: "User-Agent")
-        guard let (data, _) = try? await URLSession.shared.data(for: request),
-              let tracks = try? JSONDecoder().decode([LRCLibTrack].self, from: data)
-        else { return .unavailable }
-        // Closest duration wins; versions of a song often differ by intros and outros.
-        let candidates = tracks.filter { $0.instrumental != true && ($0.syncedLyrics != nil || $0.plainLyrics != nil) }
-        let best = candidates.min { abs(($0.duration ?? 0) - duration) < abs(($1.duration ?? 0) - duration) }
-        if let synced = best?.syncedLyrics, let parsed = LRCParser.parse(synced) {
-            return .synced(SyncedLyrics(lines: parsed.lines, source: "LRCLIB"))
-        }
-        if let plain = best?.plainLyrics { return .plain(Lyrics(text: plain, source: "LRCLIB")) }
         return .unavailable
     }
 

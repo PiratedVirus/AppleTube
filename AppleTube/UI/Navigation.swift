@@ -7,52 +7,16 @@ enum Route: Hashable {
 }
 
 extension View {
-    /// Registers the shared destinations; call once per tab's NavigationStack root. Pages zoom out of the
-    /// card that opened them, like Apple Music.
+    /// Registers the shared destinations; call once per tab's NavigationStack root. Pages slide in like
+    /// Apple Music's, which keeps the edge swipe-back gesture.
     func musicDestinations() -> some View {
-        modifier(MusicDestinations())
-    }
-
-    /// Marks a card as the zoom source for the page it opens.
-    func zoomSource(for route: Route?) -> some View {
-        modifier(ZoomSource(route: route))
-    }
-}
-
-private struct MusicDestinations: ViewModifier {
-    @Namespace private var zoom
-
-    func body(content: Content) -> some View {
-        content
-            .environment(\.zoomNamespace, zoom)
-            .navigationDestination(for: Route.self) { route in
-                Group {
-                    switch route {
-                    case let .playlist(id, title): PlaylistDetailView(id: id, fallbackTitle: title)
-                    case let .artist(id, name): ArtistView(id: id, fallbackName: name)
-                    }
-                }
-                .navigationTransition(.zoom(sourceID: route, in: zoom))
-                .environment(\.zoomNamespace, zoom)
+        navigationDestination(for: Route.self) { route in
+            switch route {
+            case let .playlist(id, title): PlaylistDetailView(id: id, fallbackTitle: title)
+            case let .artist(id, name): ArtistView(id: id, fallbackName: name)
             }
-    }
-}
-
-private struct ZoomSource: ViewModifier {
-    let route: Route?
-    @Environment(\.zoomNamespace) private var zoom
-
-    func body(content: Content) -> some View {
-        if let route, let zoom {
-            content.matchedTransitionSource(id: route, in: zoom)
-        } else {
-            content
         }
     }
-}
-
-extension EnvironmentValues {
-    @Entry var zoomNamespace: Namespace.ID?
 }
 
 extension HomeSectionItem {
@@ -78,6 +42,8 @@ final class AppState {
     // Developer launch argument for screenshots: `-startTab radio|library|search`.
     var tab = UserDefaults.standard.string(forKey: "startTab") ?? "home"
     var homePath = NavigationPath()
+    /// Bumped when the already-selected Search tab is tapped again; SearchView focuses its field.
+    var searchFocusRequest = 0
 
     /// Closes Now Playing and opens a page on the Home tab (Apple Music does the same from the player).
     func show(_ route: Route) {

@@ -133,7 +133,6 @@ private struct TopPickCard: View {
         }
         .frame(width: 250)
         .clipShape(.rect(cornerRadius: 14, style: .continuous))
-        .zoomSource(for: item.route)
         .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
     }
 }

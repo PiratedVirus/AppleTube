@@ -7,7 +7,10 @@ struct RootView: View {
     @Namespace private var playerZoom
 
     var body: some View {
-        TabView(selection: $app.tab) {
+        TabView(selection: Binding(get: { app.tab }, set: { newTab in
+            if newTab == "search", app.tab == "search" { app.searchFocusRequest += 1 }
+            app.tab = newTab
+        })) {
             Tab("Home", systemImage: "house.fill", value: "home") { HomeView() }
             Tab("Radio", systemImage: "dot.radiowaves.left.and.right", value: "radio") { RadioView() }
             Tab("Library", systemImage: "music.note.square.stack.fill", value: "library") { LibraryView() }

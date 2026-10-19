@@ -35,35 +35,40 @@ struct LibraryView: View {
         if case let .loaded(content) = content { content } else { nil }
     }
 
+    /// A ScrollView, not a List: a List row holding several links fires all of them on one tap, which pushed
+    /// a stack of playlists (Back then "rotated" through them).
     private var library: some View {
-        List {
-            Section {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
                 ForEach(LibraryCategory.allCases) { category in
                     NavigationLink(value: category) {
-                        Label(category.title, systemImage: category.symbol)
-                            .font(.title3)
-                            .labelStyle(LibraryRowLabelStyle())
+                        HStack {
+                            Label(category.title, systemImage: category.symbol)
+                                .font(.title3)
+                                .labelStyle(LibraryRowLabelStyle())
+                            Spacer()
+                            Image(systemName: "chevron.right").font(.subheadline.weight(.semibold)).foregroundStyle(.tertiary)
+                        }
+                        .padding(.horizontal)
+                        .padding(.vertical, 4)
+                        .contentShape(.rect)
                     }
+                    .buttonStyle(.plain)
+                    Divider().padding(.leading, 58)
                 }
-            }
-            .listSectionSeparator(.hidden, edges: .top)
 
-            Section {
+                Text("Recently Added").font(.title2.bold()).padding(.horizontal).padding(.top, 24).padding(.bottom, 10)
                 switch content {
                 case .loading:
-                    LoadingView().listRowSeparator(.hidden)
+                    LoadingView()
                 case let .failed(message):
-                    ErrorView(message: message) { Task { await load() } }.listRowSeparator(.hidden)
+                    ErrorView(message: message) { Task { await load() } }
                 case .loaded:
-                    RecentlyAddedGrid(playlists: playlists, albums: loadedContent?.albums ?? [])
-                        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-                        .listRowSeparator(.hidden)
+                    RecentlyAddedGrid(playlists: playlists, albums: loadedContent?.albums ?? []).padding(.horizontal)
                 }
-            } header: {
-                Text("Recently Added").font(.title2.bold()).foregroundStyle(.primary).textCase(nil)
             }
+            .padding(.bottom, 100)
         }
-        .listStyle(.plain)
         .refreshable { await load() }
     }
 
@@ -116,7 +121,7 @@ private struct RecentlyAddedGrid: View {
                 if let route = item.route {
                     NavigationLink(value: route) {
                         VStack(alignment: .leading, spacing: 4) {
-                            ArtworkView(url: item.thumbnailURL).zoomSource(for: item.route)
+                            ArtworkView(url: item.thumbnailURL)
                             Text(item.title).font(.subheadline).lineLimit(1)
                             if let subtitle = item.homeCardSubtitle {
                                 Text(subtitle).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)

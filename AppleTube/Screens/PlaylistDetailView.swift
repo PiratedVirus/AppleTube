@@ -6,7 +6,7 @@ struct PlaylistDetailView: View {
     let id: String
     let fallbackTitle: String
 
-    @State private var page: Loadable<(detail: PlaylistDetail, listId: String?)> = .loading
+    @State private var page: Loadable<YTMusicAPI.PlaylistPage> = .loading
     @State private var tint: Color = Color(.systemBackground)
     @State private var player = WebPlayer.shared
     @State private var artistRoute: Route?
@@ -19,8 +19,10 @@ struct PlaylistDetailView: View {
                 LoadingView().plainRow()
             case let .failed(message):
                 ErrorView(message: message) { Task { await load() } }.plainRow()
-            case let .loaded((detail, listId)):
-                header(detail: detail, listId: listId).plainRow()
+            case let .loaded(loaded):
+                let detail = loaded.response.detail
+                let listId = loaded.playbackListId
+                header(detail: detail, page: loaded, listId: listId).plainRow()
                 ForEach(Array(detail.tracks.enumerated()), id: \.offset) { index, song in
                     SongRow(song: song, index: index + 1, showsArtwork: !detail.isAlbum, isCurrent: player.videoId == song.videoId) {
                         player.play(song, playbackListId: listId)
@@ -56,15 +58,21 @@ struct PlaylistDetailView: View {
     }
 
     @ViewBuilder
-    private func header(detail: PlaylistDetail, listId: String?) -> some View {
+    private func header(detail: PlaylistDetail, page: YTMusicAPI.PlaylistPage, listId: String?) -> some View {
         VStack(spacing: 14) {
-            ArtworkView(url: detail.thumbnailURL, cornerRadius: 12)
-                .frame(width: 260)
-                .shadow(color: .black.opacity(0.3), radius: 20, y: 10)
-                .padding(.top, 8)
+            Group {
+                if let url = Self.artworkURL(page) {
+                    ArtworkView(url: url, cornerRadius: 12)
+                } else {
+                    MosaicArtwork(urls: detail.tracks.compactMap(\.thumbnailURL))
+                }
+            }
+            .frame(width: 260)
+            .shadow(color: .black.opacity(0.3), radius: 20, y: 10)
+            .padding(.top, 8)
 
             VStack(spacing: 4) {
-                Text(detail.title)
+                Text(title(page))
                     .font(.title2.bold())
                     .multilineTextAlignment(.center)
                 if let author = detail.author {
@@ -99,7 +107,7 @@ struct PlaylistDetailView: View {
             }
             .padding(.vertical, 4)
 
-            if let description = detail.description, !description.isEmpty {
+            if let description = detail.description, !description.isEmpty, description != title(page) {
                 Text(description)
                     .font(.footnote)
                     .opacity(0.75)
@@ -107,8 +115,20 @@ struct PlaylistDetailView: View {
                     .padding(.horizontal)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-
         }
+        .frame(maxWidth: .infinity)
+        .padding(.bottom, 8)
+    }
+
+    /// The parser names playlists it doesn't understand "Unknown Playlist"; prefer anything better.
+    private func title(_ page: YTMusicAPI.PlaylistPage) -> String {
+        let parsed = page.response.detail.title
+        guard parsed == "Unknown Playlist" || parsed.isEmpty else { return parsed }
+        return [fallbackTitle, page.headerTitle ?? ""].first { !$0.isEmpty } ?? "Playlist"
+    }
+
+    private static func artworkURL(_ page: YTMusicAPI.PlaylistPage) -> URL? {
+        page.response.detail.thumbnailURL ?? page.headerArtworkURL
     }
 
     private func circleButton(_ symbol: String, action: @escaping () -> Void) -> some View {
@@ -138,11 +158,12 @@ struct PlaylistDetailView: View {
     private func load() async {
         do {
             let result = try await YTMusicAPI.shared.playlist(id: id)
-            if let color = await ArtworkColor.color(for: result.response.detail.thumbnailURL) {
+            let artwork = Self.artworkURL(result) ?? result.response.detail.tracks.first?.thumbnailURL
+            if let color = await ArtworkColor.color(for: artwork) {
                 tint = color.mix(with: .black, by: 0.1)
             }
             withAnimation(.easeOut(duration: 0.25)) {
-                page = .loaded((result.response.detail, result.playbackListId))
+                page = .loaded(result)
             }
         } catch {
             page = .failed(error.localizedDescription)
@@ -156,5 +177,28 @@ private extension View {
         listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
             .listRowInsets(EdgeInsets())
+    }
+}
+
+/// Apple Music's cover for playlists without one: the first four songs' artwork in a 2×2 grid.
+private struct MosaicArtwork: View {
+    let urls: [URL]
+
+    var body: some View {
+        let unique = urls.reduce(into: [URL]()) { if !$0.contains($1) { $0.append($1) } }
+        if unique.count >= 4 {
+            Grid(horizontalSpacing: 0, verticalSpacing: 0) {
+                GridRow { tile(unique[0]); tile(unique[1]) }
+                GridRow { tile(unique[2]); tile(unique[3]) }
+            }
+            .aspectRatio(1, contentMode: .fit)
+            .clipShape(.rect(cornerRadius: 12, style: .continuous))
+        } else {
+            ArtworkView(url: unique.first, cornerRadius: 12)
+        }
+    }
+
+    private func tile(_ url: URL) -> some View {
+        ArtworkView(url: url, cornerRadius: 0, pixelSize: 300)
     }
 }

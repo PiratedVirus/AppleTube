@@ -14,45 +14,35 @@ struct SearchView: View {
     @State private var browse: [HomeSection] = []
     @State private var library: PlaylistParser.LibraryContent?
     @State private var libraryPlaylists: [Playlist] = []
+    @State private var app = AppState.shared
+    @FocusState private var isSearchFocused: Bool
+    @State private var submittedQuery: String?
+
+    private var isIdle: Bool { query.isEmpty && results == nil }
 
     var body: some View {
         NavigationStack {
-            List {
-                if scope == .library, !query.isEmpty {
-                    LibraryResults(query: query, content: library, playlists: libraryPlaylists)
-                } else if let results {
-                    switch results {
-                    case .loading:
-                        LoadingView().listRowSeparator(.hidden)
-                    case let .failed(message):
-                        ErrorView(message: message) { submit() }.listRowSeparator(.hidden)
-                    case let .loaded(response):
-                        ForEach(response.allItems.prefix(40)) { item in
-                            ResultRow(item: item, fallbackArtist: response.artists.first?.name)
-                        }
-                    }
-                } else if !query.isEmpty {
-                    ForEach(suggestions) { suggestion in
-                        Button {
-                            query = suggestion.query
-                            submit()
-                        } label: {
-                            Label(suggestion.query, systemImage: "magnifyingglass").foregroundStyle(.primary)
-                        }
-                    }
+            Group {
+                if isIdle {
+                    // ScrollView, not List: shelf rows hold many links and a List row fires them all on one tap.
+                    ScrollView { idleContent.padding(.bottom, 100) }
                 } else {
-                    idleContent
+                    resultsList
                 }
             }
-            .listStyle(.plain)
             .navigationTitle("Search")
             .searchable(text: $query, prompt: "Artists, Songs, Lyrics and More")
+            .searchFocused($isSearchFocused)
+            // Tapping the Search tab again puts the cursor straight in the field.
+            .onChange(of: app.searchFocusRequest) { _, _ in isSearchFocused = true }
             .searchScopes($scope, activation: .onSearchPresentation) {
                 ForEach(Scope.allCases, id: \.self) { Text($0.rawValue).tag($0) }
             }
             .onSubmit(of: .search, submit)
             .task(id: query) {
-                if case .loading = results { return }
+                // This task also re-runs when the screen reappears (e.g. Back from an artist); keep the results
+                // unless the text actually changed since the search was submitted.
+                if query == submittedQuery, results != nil { return }
                 results = nil
                 guard scope == .catalog else { return }
                 try? await Task.sleep(for: .milliseconds(200))
@@ -78,34 +68,70 @@ struct SearchView: View {
         }
     }
 
-    @ViewBuilder
-    private var idleContent: some View {
-        if !recents.items.isEmpty {
-            Section {
-                ForEach(recents.items) { RecentRow(item: $0) }
-                    .onDelete { recents.remove(at: $0) }
-            } header: {
-                HStack {
-                    Text("Recently Searched").font(.title3.bold()).foregroundStyle(.primary)
-                    Spacer()
-                    Button("Clear") { withAnimation { recents.clear() } }
-                        .foregroundStyle(Color.musicAccent)
+    private var resultsList: some View {
+        List {
+            if scope == .library, !query.isEmpty {
+                LibraryResults(query: query, content: library, playlists: libraryPlaylists)
+            } else if let results {
+                switch results {
+                case .loading:
+                    LoadingView().listRowSeparator(.hidden)
+                case let .failed(message):
+                    ErrorView(message: message) { submit() }.listRowSeparator(.hidden)
+                case let .loaded(response):
+                    ForEach(response.allItems.prefix(40)) { item in
+                        ResultRow(item: item, fallbackArtist: response.artists.first?.name)
+                    }
                 }
-                .textCase(nil)
+            } else if !query.isEmpty {
+                ForEach(suggestions) { suggestion in
+                    Button {
+                        query = suggestion.query
+                        submit()
+                    } label: {
+                        Label(suggestion.query, systemImage: "magnifyingglass").foregroundStyle(.primary)
+                    }
+                }
             }
         }
-        ForEach(browse) { section in
-            Shelf(title: section.title) {
-                ForEach(section.items) { ItemCard(item: $0, width: 150) }
+        .listStyle(.plain)
+    }
+
+    private var idleContent: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            if !recents.items.isEmpty {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack {
+                        Text("Recently Searched").font(.title3.bold())
+                        Spacer()
+                        Button("Clear") { withAnimation { recents.clear() } }
+                            .foregroundStyle(Color.musicAccent)
+                    }
+                    .padding(.bottom, 8)
+                    ForEach(recents.items) { item in
+                        RecentRow(item: item)
+                            .padding(.vertical, 6)
+                            .contextMenu {
+                                Button("Remove", systemImage: "trash", role: .destructive) { withAnimation { recents.remove(item) } }
+                            }
+                        Divider().padding(.leading, 68)
+                    }
+                }
+                .padding(.horizontal)
             }
-            .listRowInsets(EdgeInsets(top: 16, leading: 0, bottom: 8, trailing: 0))
-            .listRowSeparator(.hidden)
+            ForEach(browse) { section in
+                Shelf(title: section.title) {
+                    ForEach(section.items) { ItemCard(item: $0, width: 150) }
+                }
+            }
         }
+        .padding(.top, 8)
     }
 
     private func submit() {
         let text = query
         guard !text.isEmpty, scope == .catalog else { return }
+        submittedQuery = text
         results = .loading
         Task {
             do {
@@ -288,8 +314,8 @@ final class RecentSearches {
         save()
     }
 
-    func remove(at offsets: IndexSet) {
-        items.remove(atOffsets: offsets)
+    func remove(_ item: Item) {
+        items.removeAll { $0.id == item.id }
         save()
     }
 

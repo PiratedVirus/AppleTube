@@ -29,6 +29,12 @@ Personal iOS app: Apple Music-style UI on top of the user's YouTube Music Premiu
   path is clicking the real queue-row menu item, retargeting `queueTarget.videoId` (see WebPlayer+Queue.swift).
   Jump to a queue row by clicking its `ytmusic-play-button-renderer`. Shuffle/repeat are player-bar buttons; autoplay is `#automix`.
 - In a List, NavigationLink renders as a full-width chevron row; use a Button + navigationDestination(item:) inside headers.
+- A List row containing several NavigationLinks fires all of them on one tap (pushed a stack of playlists). Put grids
+  and shelves in a ScrollView, never in a List row.
+- Don't use zoom navigation transitions for pushes: they disable the edge swipe-back.
+- The hidden player web view must stay `accessibilityElementsHidden`, or VoiceOver and UI tests see the whole YT page.
+- `.task(id:)` re-runs when a view reappears (e.g. after Back); guard against resetting state.
+- UI tests: `xcodebuild test ... -only-testing:AppleTubeUITests` (live network; ~2 min).
 
 ## Stages
 0 setup · 1 read references · 2 playback spike (lock-screen background audio is the go/no-go) · 3 map API with REA · 4 UI screen by screen · 5 device + polish

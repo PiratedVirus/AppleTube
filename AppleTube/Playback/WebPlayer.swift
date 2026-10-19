@@ -53,6 +53,9 @@ final class WebPlayer: NSObject {
         webView.navigationDelegate = self
         webView.isUserInteractionEnabled = false
         webView.alpha = 0.01
+        // The hidden page must not show up to VoiceOver (or UI tests) as hundreds of web elements.
+        webView.accessibilityElementsHidden = true
+        webView.isAccessibilityElement = false
         nowPlaying.connect(to: self)
         observeAppLifecycle()
     }
