@@ -38,7 +38,7 @@
   .shots figure { flex: 0 0 auto; scroll-snap-align: center; text-align: center; }
   .shots img { width: 230px; border-radius: 30px; border: 1px solid var(--line); display: block; box-shadow: 0 18px 40px rgba(0,0,0,.5); }
   .shots figcaption { color: var(--muted); font-size: 14px; margin-top: 10px; }
-  @media (min-width: 1100px) { .shots { justify-content: center; flex-wrap: wrap; } .shots img { width: 220px; } }
+  @media (min-width: 1000px) { .shots { display: grid; grid-template-columns: repeat(4, 220px); justify-content: center; gap: 28px 24px; overflow: visible; } .shots img { width: 220px; } }
 
   section { padding: 56px 0; border-top: 1px solid var(--line); }
   h2 { font-size: clamp(28px, 4vw, 38px); letter-spacing: -0.02em; margin-bottom: 8px; }
@@ -75,14 +75,14 @@
 </header>
 
 <div class="shots" aria-label="Screenshots">
-  <figure><img src="screenshots/home.jpg" alt="Home screen" loading="lazy"><figcaption>Home</figcaption></figure>
-  <figure><img src="screenshots/now-playing.jpg" alt="Now Playing" loading="lazy"><figcaption>Now Playing</figcaption></figure>
-  <figure><img src="screenshots/queue.jpg" alt="Queue" loading="lazy"><figcaption>Queue</figcaption></figure>
-  <figure><img src="screenshots/song-menu.jpg" alt="Song context menu" loading="lazy"><figcaption>Song menu</figcaption></figure>
-  <figure><img src="screenshots/playlist.jpg" alt="Playlist page" loading="lazy"><figcaption>Playlist</figcaption></figure>
-  <figure><img src="screenshots/library.jpg" alt="Library with designed covers" loading="lazy"><figcaption>Library</figcaption></figure>
-  <figure><img src="screenshots/search.jpg" alt="Search" loading="lazy"><figcaption>Search</figcaption></figure>
-  <figure><img src="screenshots/settings.jpg" alt="Settings" loading="lazy"><figcaption>Settings</figcaption></figure>
+  <figure><img src="screenshots/home.jpg" alt="Home screen"><figcaption>Home</figcaption></figure>
+  <figure><img src="screenshots/now-playing.jpg" alt="Now Playing"><figcaption>Now Playing</figcaption></figure>
+  <figure><img src="screenshots/queue.jpg" alt="Queue"><figcaption>Queue</figcaption></figure>
+  <figure><img src="screenshots/song-menu.jpg" alt="Song context menu"><figcaption>Song menu</figcaption></figure>
+  <figure><img src="screenshots/playlist.jpg" alt="Playlist page"><figcaption>Playlist</figcaption></figure>
+  <figure><img src="screenshots/library.jpg" alt="Library with designed covers"><figcaption>Library</figcaption></figure>
+  <figure><img src="screenshots/search.jpg" alt="Search"><figcaption>Search</figcaption></figure>
+  <figure><img src="screenshots/settings.jpg" alt="Settings"><figcaption>Settings</figcaption></figure>
 </div>
 
 <main class="wrap">
