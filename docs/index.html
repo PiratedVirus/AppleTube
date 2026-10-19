@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AppleTube: Apple Music–style app for YouTube Music</title>
+<meta name="description" content="An open-source iPhone app that puts your YouTube Music Premium account behind an Apple Music–style interface: Liquid Glass, synced lyrics, a real queue, designed playlist covers.">
+<meta property="og:title" content="AppleTube">
+<meta property="og:description" content="Your YouTube Music Premium account, with an Apple Music–style interface. Open source, SwiftUI, iOS 26.">
+<meta property="og:image" content="https://piratedvirus.github.io/AppleTube/screenshots/now-playing.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="icon.png">
+<style>
+  :root {
+    --bg: #0b0b0d; --fg: #f5f5f7; --muted: #a1a1a6; --card: #1c1c1f; --line: #2c2c30;
+    --accent: #fa2d48; --accent2: #ff7a45;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--bg); color: var(--fg); font: 17px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
+  a { color: inherit; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
+
+  header { position: relative; overflow: hidden; text-align: center; padding: 88px 0 40px; }
+  header::before { content: ""; position: absolute; inset: -40% -20% auto; height: 120%; background: radial-gradient(closest-side, rgba(250,45,72,.35), transparent 70%), radial-gradient(closest-side at 70% 60%, rgba(255,122,69,.22), transparent 70%); filter: blur(30px); z-index: -1; }
+  header img { width: 112px; height: 112px; border-radius: 26px; box-shadow: 0 16px 40px rgba(0,0,0,.55); }
+  h1 { font-size: clamp(40px, 7vw, 68px); letter-spacing: -0.03em; line-height: 1.05; margin-top: 22px; }
+  .tagline { font-size: clamp(19px, 2.6vw, 24px); color: var(--muted); max-width: 640px; margin: 14px auto 0; }
+  .tagline b { color: var(--fg); font-weight: 600; }
+  .ctas { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 30px; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 13px 22px; border-radius: 999px; text-decoration: none; font-weight: 600; }
+  .btn.primary { background: #d91e3a; color: #fff; }
+  .btn.ghost { background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14); }
+  .chips { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 22px; color: var(--muted); font-size: 14px; }
+  .chips span { padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; }
+
+  .shots { display: flex; gap: 18px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 34px 20px 26px; scrollbar-width: none; }
+  .shots::-webkit-scrollbar { display: none; }
+  .shots figure { flex: 0 0 auto; scroll-snap-align: center; text-align: center; }
+  .shots img { width: 230px; border-radius: 30px; border: 1px solid var(--line); display: block; box-shadow: 0 18px 40px rgba(0,0,0,.5); }
+  .shots figcaption { color: var(--muted); font-size: 14px; margin-top: 10px; }
+  @media (min-width: 1100px) { .shots { justify-content: center; flex-wrap: wrap; } .shots img { width: 220px; } }
+
+  section { padding: 56px 0; border-top: 1px solid var(--line); }
+  h2 { font-size: clamp(28px, 4vw, 38px); letter-spacing: -0.02em; margin-bottom: 8px; }
+  .lede { color: var(--muted); max-width: 680px; margin-bottom: 30px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 22px; }
+  .card .ico { font-size: 26px; }
+  .card h3 { font-size: 18px; margin: 10px 0 6px; }
+  .card p { color: var(--muted); font-size: 15px; }
+
+  .flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+  .flow .card b { color: var(--accent2); font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
+
+  pre { background: #151517; border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; overflow-x: auto; font: 14px/1.6 ui-monospace, "SF Mono", Menlo, monospace; color: #e6e6ea; }
+  pre .c { color: #94949c; }
+  .note { color: var(--muted); font-size: 15px; margin-top: 14px; }
+
+  footer { border-top: 1px solid var(--line); padding: 36px 0 60px; color: var(--muted); font-size: 13px; }
+  footer p + p { margin-top: 8px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <img src="icon.png" alt="AppleTube app icon">
+    <h1>AppleTube</h1>
+    <p class="tagline">Your <b>YouTube Music Premium</b> library, with an interface modelled on <b>Apple Music</b>.</p>
+    <div class="ctas">
+      <a class="btn primary" href="https://github.com/PiratedVirus/AppleTube">View on GitHub</a>
+      <a class="btn ghost" href="#install">Install it on your iPhone</a>
+    </div>
+    <div class="chips"><span>SwiftUI</span><span>iOS 26 · Liquid Glass</span><span>Open source · MIT</span><span>No servers, no passwords</span></div>
+  </div>
+</header>
+
+<div class="shots" aria-label="Screenshots">
+  <figure><img src="screenshots/home.jpg" alt="Home screen" loading="lazy"><figcaption>Home</figcaption></figure>
+  <figure><img src="screenshots/now-playing.jpg" alt="Now Playing" loading="lazy"><figcaption>Now Playing</figcaption></figure>
+  <figure><img src="screenshots/queue.jpg" alt="Queue" loading="lazy"><figcaption>Queue</figcaption></figure>
+  <figure><img src="screenshots/song-menu.jpg" alt="Song context menu" loading="lazy"><figcaption>Song menu</figcaption></figure>
+  <figure><img src="screenshots/playlist.jpg" alt="Playlist page" loading="lazy"><figcaption>Playlist</figcaption></figure>
+  <figure><img src="screenshots/library.jpg" alt="Library with designed covers" loading="lazy"><figcaption>Library</figcaption></figure>
+  <figure><img src="screenshots/search.jpg" alt="Search" loading="lazy"><figcaption>Search</figcaption></figure>
+  <figure><img src="screenshots/settings.jpg" alt="Settings" loading="lazy"><figcaption>Settings</figcaption></figure>
+</div>
+
+<main class="wrap">
+  <section>
+    <h2>Apple Music's feel. YouTube Music's catalogue.</h2>
+    <p class="lede">AppleTube is a native SwiftUI app. Everything you see is built natively, and the music is played by YouTube Music's own player, so Premium works as it does on the web: no ads, background play, your quality settings.</p>
+    <div class="grid">
+      <div class="card"><div class="ico">🎤</div><h3>Synced lyrics</h3><p>Lines scroll and light up in time, tap a line to jump, animated dots in instrumental breaks. Uses YouTube's timed lyrics, then LRCLIB.</p></div>
+      <div class="card"><div class="ico">📜</div><h3>A real queue</h3><p>History, Continue Playing, swipe to remove, Shuffle, Repeat and Autoplay. Play Next or Play Last works on songs, albums and playlists.</p></div>
+      <div class="card"><div class="ico">🎨</div><h3>Designed playlist covers</h3><p>Every playlist you own gets a cover from one design system: 12 palettes × 4 motifs, editable per playlist.</p></div>
+      <div class="card"><div class="ico">👆</div><h3>Menus and swipes everywhere</h3><p>Long-press any song for a preview and a full Apple Music–style menu. Swipe to queue. Add to playlists, love, create stations.</p></div>
+      <div class="card"><div class="ico">⚡️</div><h3>Instant screens</h3><p>Pages paint from an on-disk cache straight away, then refresh quietly. Artwork is cached and prefetched.</p></div>
+      <div class="card"><div class="ico">🔒</div><h3>Lock Screen and background</h3><p>Plays in the background with Lock Screen controls, artwork and AirPlay. It keeps playing when the phone locks.</p></div>
+      <div class="card"><div class="ico">🏠</div><h3>Make it yours</h3><p>Reorder or hide Home shelves and Library categories, pick an accent colour and theme, set a profile photo.</p></div>
+      <div class="card"><div class="ico">🌈</div><h3>Pages tinted by artwork</h3><p>Album and playlist pages, and Now Playing, take their colours from the artwork, as in iOS 26.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>How it works</h2>
+    <p class="lede">There is no backend and there are no API keys. The app talks to music.youtube.com exactly as your browser does.</p>
+    <div class="flow">
+      <div class="card"><b>Sign in</b><h3>On Google's own page</h3><p>You sign in inside a web view. AppleTube never sees your password; it reuses the session's cookies to sign requests.</p></div>
+      <div class="card"><b>Data</b><h3>InnerTube API</h3><p>Home, search, library and playlists come from YouTube Music's web API, parsed with code adapted from Kaset (MIT).</p></div>
+      <div class="card"><b>Playback</b><h3>A hidden web player</h3><p>YouTube Music's own player runs out of sight. The app drives it from Swift: switching tracks, editing the queue, Media Session controls.</p></div>
+    </div>
+  </section>
+
+  <section id="install">
+    <h2>Install it on your iPhone</h2>
+    <p class="lede">It isn't on the App Store. You build it with Xcode and install it on your own phone. A free Apple ID is enough.</p>
+<pre><span class="c"># needs a Mac with Xcode 26+, an iPhone on iOS 26+, and YouTube Music Premium</span>
+brew install xcodegen
+git clone https://github.com/PiratedVirus/AppleTube.git &amp;&amp; cd AppleTube
+cp Local.example.yml Local.yml   <span class="c"># your team ID + a unique bundle ID</span>
+xcodegen generate
+open AppleTube.xcodeproj         <span class="c"># choose your iPhone, press Run</span></pre>
+    <p class="note">Apps signed with a free Apple ID stop opening after 7 days. The repo includes a launch agent that rebuilds the app and reinstalls it over Wi-Fi before that happens. See the README.</p>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>AppleTube is an independent, open-source personal project. It is not affiliated with, endorsed by or sponsored by Apple or Google/YouTube. Apple Music, YouTube and YouTube Music are trademarks of their owners. It needs your own YouTube Music Premium subscription.</p>
+    <p><a href="https://github.com/PiratedVirus/AppleTube">GitHub</a> · MIT License · Credits: <a href="https://github.com/sozercan/kaset">Kaset</a>, <a href="https://lrclib.net">LRCLIB</a></p>
+  </div>
+</footer>
+</body>
+</html>
