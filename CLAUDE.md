@@ -11,7 +11,7 @@ Personal iOS app: Apple Music-style UI on top of the user's YouTube Music Premiu
 ## Build
 - `xcodegen generate` after changing `project.yml` (the .xcodeproj is generated, not committed).
 - Simulator: `xcodebuild -project AppleTube.xcodeproj -scheme AppleTube -destination 'platform=iOS Simulator,name=iPhone 18 Pro,OS=27.0' -derivedDataPath build build`. Use the iOS 27.0 iPhone 18 Pro sim: the iOS 27.1 runtime only supports the foldable "iPhone Duo", which renders the wide layout.
-- Device: set DEVELOPMENT_TEAM in project.yml, then `-destination 'platform=iOS,name=<iPhone name>'`.
+- Device: signing team + bundle ID in `Local.yml` (gitignored, from Local.example.yml), then `-destination 'platform=iOS,name=<iPhone name>'`.
 
 ## Testing
 - `xcodebuild test ... -scheme AppleTube` runs parser tests against `AppleTubeTests/Fixtures` (real signed-out responses).
@@ -19,7 +19,7 @@ Personal iOS app: Apple Music-style UI on top of the user's YouTube Music Premiu
 - Screenshots: `Scripts/screenshot.sh <out.png> <wait> [args]`. Launch args: `-startTab radio|library|search`,
   `-openRoute playlist:<id>|artist:<id>`, `-autoplayVideoId <id>`, `-showNowPlaying YES`, `-nowPlayingPanel lyrics|queue`,
   `-searchQuery <text>`, `-thenPlayVideoId <id>` (switch track after 30s). First launch after install takes ~15s; wait longer for the first shot.
-- Device: iPhone 15 (UDID 00008120-00066C800E01A01E), iOS 27. Install with `Scripts/refresh_install.sh --force` (builds HEAD, installs over Wi-Fi,
+- Device: the user's iPhone 15, iOS 27 (found automatically; override with APPLETUBE_DEVICE). Install with `Scripts/refresh_install.sh --force` (builds HEAD, installs over Wi-Fi,
   records the profile expiry). A launchd agent (`Scripts/install_refresh_agent.sh`) runs it hourly and reinstalls
   within 3 days of the free 7-day profile expiring; log in `~/Library/Logs/AppleTubeRefresh.log`. Needs the Apple ID
   signed in under Xcode → Settings → Accounts to renew profiles.

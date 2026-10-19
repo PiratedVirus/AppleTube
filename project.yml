@@ -1,12 +1,13 @@
 name: AppleTube
+# Your signing team and bundle ID live in Local.yml (gitignored): `cp Local.example.yml Local.yml` and fill it in.
+include: [Local.yml]
 options:
-  bundleIdPrefix: dev.saurabhk
+  bundleIdPrefix: com.example
   deploymentTarget:
     iOS: "26.0"
 settings:
   base:
     SWIFT_VERSION: "6.0"
-    DEVELOPMENT_TEAM: F9KW2XLTZ5   # Personal Team (free): device installs expire after 7 days
     CODE_SIGN_STYLE: Automatic
 targets:
   AppleTube:
@@ -22,7 +23,7 @@ targets:
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: dev.saurabhk.AppleTube
+        PRODUCT_BUNDLE_IDENTIFIER: $(APPLETUBE_BUNDLE_ID:default=com.example.AppleTube)
         TARGETED_DEVICE_FAMILY: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
   AppleTubeTests:
@@ -39,7 +40,7 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: dev.saurabhk.AppleTubeTests
+        PRODUCT_BUNDLE_IDENTIFIER: $(APPLETUBE_BUNDLE_ID:default=com.example.AppleTube)Tests
   AppleTubeUITests:
     type: bundle.ui-testing
     platform: iOS
@@ -49,7 +50,7 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: dev.saurabhk.AppleTubeUITests
+        PRODUCT_BUNDLE_IDENTIFIER: $(APPLETUBE_BUNDLE_ID:default=com.example.AppleTube)UITests
         TEST_TARGET_NAME: AppleTube
 schemes:
   AppleTube:

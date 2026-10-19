@@ -6,3 +6,4 @@ DerivedData/
 xcuserdata/
 docs/reference-screens/*
 !docs/reference-screens/SOURCES.md
+Local.yml

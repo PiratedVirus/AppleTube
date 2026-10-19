@@ -1,0 +1,7 @@
+# Copy to Local.yml (gitignored) and fill in, then run `xcodegen generate`.
+settings:
+  base:
+    # Xcode → Settings → Accounts → your team. A free Personal Team works; installs then last 7 days.
+    DEVELOPMENT_TEAM: ABCDE12345
+    # Must be unique to you (free teams can't reuse someone else's ID).
+    APPLETUBE_BUNDLE_ID: com.yourname.AppleTube

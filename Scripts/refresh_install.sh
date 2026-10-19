@@ -9,8 +9,9 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-DEVICE="00008120-00066C800E01A01E"
-BUNDLE_ID="dev.saurabhk.AppleTube"
+# The bundle ID from Local.yml; the device from APPLETUBE_DEVICE or the first paired iPhone.
+BUNDLE_ID=$(sed -n 's/^ *APPLETUBE_BUNDLE_ID: *//p' "$REPO/Local.yml" 2>/dev/null)
+DEVICE="${APPLETUBE_DEVICE:-}"
 RENEW_DAYS=3
 WORK="$HOME/Library/Caches/AppleTubeRefresh"
 STATE="$WORK/installed-expiry"   # epoch seconds when the installed build's profile expires
@@ -23,6 +24,14 @@ profile_expiry() { security cms -D -i "$1" 2>/dev/null | plutil -extract Expirat
 to_epoch() { date -j -u -f '%Y-%m-%dT%H:%M:%SZ' "$1" +%s; }
 
 mkdir -p "$WORK"
+[ -n "$BUNDLE_ID" ] || { echo "Set APPLETUBE_BUNDLE_ID in Local.yml (see Local.example.yml)"; exit 1; }
+if [ -z "$DEVICE" ]; then
+    xcrun devicectl list devices --json-output "$WORK/devices.json" >/dev/null 2>&1
+    DEVICE=$(python3 -c 'import json, sys
+devices = json.load(open(sys.argv[1]))["result"]["devices"]
+print(next((d["hardwareProperties"]["udid"] for d in devices
+            if d["hardwareProperties"].get("reality") == "physical" and d["hardwareProperties"].get("deviceType") == "iPhone"), ""))' "$WORK/devices.json" 2>/dev/null)
+fi
 now=$(date +%s)
 expiry=$(cat "$STATE" 2>/dev/null || echo 0)
 if [ "${1:-}" != "--force" ] && [ $((expiry - now)) -gt $((RENEW_DAYS * 86400)) ]; then
@@ -53,6 +62,7 @@ done
 # Build the last commit, not whatever is half-edited in the working tree.
 rm -rf "$WORK/src" && mkdir -p "$WORK/src"
 git -C "$REPO" archive HEAD | tar -x -C "$WORK/src" || fail "couldn't export source"
+cp "$REPO/Local.yml" "$WORK/src/"
 (cd "$WORK/src" && xcodegen generate --quiet) || fail "xcodegen failed"
 xcodebuild -project "$WORK/src/AppleTube.xcodeproj" -scheme AppleTube -configuration Debug \
     -destination 'generic/platform=iOS' -derivedDataPath "$WORK/DerivedData" \

@@ -56,15 +56,15 @@ final class NavigationUITests: XCTestCase {
         more.tap()
         XCTAssertTrue(app.buttons["Play Next"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["Share Playlist…"].exists)
-        try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "/private/tmp/claude-501/-Users-saurabhkulkarni-Desktop-Other-Desktop/71bfe12a-a05b-457f-9f49-01713bf860ab/scratchpad/ui_playlist_menu.png"))
+        attachScreenshot("ui_playlist_menu")
         app.buttons["Edit Cover…"].tap()
         XCTAssertTrue(app.navigationBars["Edit Cover"].waitForExistence(timeout: 5), "cover editor didn't open")
         app.switches["Use Original Artwork"].firstMatch.tap()
         sleep(1)
-        try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "/private/tmp/claude-501/-Users-saurabhkulkarni-Desktop-Other-Desktop/71bfe12a-a05b-457f-9f49-01713bf860ab/scratchpad/ui_cover_editor.png"))
+        attachScreenshot("ui_cover_editor")
         app.buttons["Lavender"].tap()
         sleep(1)
-        try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "/private/tmp/claude-501/-Users-saurabhkulkarni-Desktop-Other-Desktop/71bfe12a-a05b-457f-9f49-01713bf860ab/scratchpad/ui_cover_editor2.png"))
+        attachScreenshot("ui_cover_editor2")
     }
 
     /// The profile button opens Settings; Customize Home lists Home's shelves.
@@ -76,11 +76,11 @@ final class NavigationUITests: XCTestCase {
         sleep(6)   // let Home load so its shelves are known
         profile.tap()
         XCTAssertTrue(app.staticTexts["Accent Colour"].waitForExistence(timeout: 5), "settings didn't open")
-        try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "/private/tmp/claude-501/-Users-saurabhkulkarni-Desktop-Other-Desktop/71bfe12a-a05b-457f-9f49-01713bf860ab/scratchpad/ui_settings1.png"))
+        attachScreenshot("ui_settings1")
         app.buttons["Customize Home"].tap()
         XCTAssertTrue(app.navigationBars["Customize Home"].waitForExistence(timeout: 5))
         sleep(1)
-        try? app.screenshot().pngRepresentation.write(to: URL(fileURLWithPath: "/private/tmp/claude-501/-Users-saurabhkulkarni-Desktop-Other-Desktop/71bfe12a-a05b-457f-9f49-01713bf860ab/scratchpad/ui_settings2.png"))
+        attachScreenshot("ui_settings2")
     }
 
     /// Tapping the Search tab while on it puts the cursor in the search field.
@@ -91,5 +91,13 @@ final class NavigationUITests: XCTestCase {
         XCTAssertTrue(tab.waitForExistence(timeout: 15))
         tab.tap()
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "keyboard didn't appear")
+    }
+
+    /// Keeps a screenshot in the test results (Xcode → Reports).
+    private func attachScreenshot(_ name: String) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 }
