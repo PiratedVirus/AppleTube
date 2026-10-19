@@ -19,7 +19,10 @@ Personal iOS app: Apple Music-style UI on top of the user's YouTube Music Premiu
 - Screenshots: `Scripts/screenshot.sh <out.png> <wait> [args]`. Launch args: `-startTab radio|library|search`,
   `-openRoute playlist:<id>|artist:<id>`, `-autoplayVideoId <id>`, `-showNowPlaying YES`, `-nowPlayingPanel lyrics|queue`,
   `-searchQuery <text>`, `-thenPlayVideoId <id>` (switch track after 30s). First launch after install takes ~15s; wait longer for the first shot.
-- Device: iPhone 15 (UDID 00008120-00066C800E01A01E), iOS 27. Install with `xcrun devicectl device install app`.
+- Device: iPhone 15 (UDID 00008120-00066C800E01A01E), iOS 27. Install with `Scripts/refresh_install.sh --force` (builds HEAD, installs over Wi-Fi,
+  records the profile expiry). A launchd agent (`Scripts/install_refresh_agent.sh`) runs it hourly and reinstalls
+  within 3 days of the free 7-day profile expiring; log in `~/Library/Logs/AppleTubeRefresh.log`. Needs the Apple ID
+  signed in under Xcode → Settings → Accounts to renew profiles.
   Crash logs: `xcrun devicectl device info files --domain-type systemCrashLogs`.
 
 ## Gotchas
